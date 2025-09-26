@@ -121,7 +121,7 @@ print(phi_plot)
 
 Then we simulate $N=100$ outcomes with spatial index phi, simulated populations for each spatial unit, and a scale of per 100,000. 
 
-```{r constructing outcome vector, out.width = "50%"}
+```{r constructing outcome vector, out.width = "100%"}
 nis <- rep(1,N) # assuming no repeated measures
 scale = 100000
 pop <- sample(10000:50000, N, TRUE)
@@ -165,7 +165,7 @@ print(str(HS_group_offset_space)) # check the returned list object
 
 The above function returns a list of several objects, including a matrix of the post-burn-in posterior beta estimates, with dimension \texttt{niter} $\times p$. We randomly select 4 betas and plot their convergence. 
 
-```{r MCMC-diagnostic-plots, out.width= "50%"}
+```{r MCMC-diagnostic-plots, out.width= "100%"}
 set.seed(2025)
 
 ran_sam = sample(1:N, 4)
@@ -187,7 +187,7 @@ MCMC_plot(HS_group_offset_space$Beta[, (ran_sam[4])], main = "HS - beta 26", col
 
 Display the posterior inclusion probability (PIP) of each beta with a selection threshold of $0.75$ for the SS based model. Here with so many features, the text size is a but small for legibility and a bit crowded, further adjustments needed with the \texttt{base_size} and \texttt{bracket_base_size} arguments, but left in to show function implementation. 
 
-```{r PIP-visualization, out.width= "50%"}
+```{r PIP-visualization, out.width= "100%"}
 post_means <- colMeans(SS_group_offset_space$pDelta)
 selected <- as.numeric(post_means > 0.75)
 tp <- sum(selected[nonNull_indices_p200_Case2]) # truly nonnulls detected 
@@ -230,7 +230,7 @@ print(res$plot)
 
 Display the 95% ETI CrI of each beta for the HS based model. Within the plot, along the x-axis are the names of the features and above are their respective groups. Here with so many features, the text size is a small for legibility and a bit crowded, further adjustments needed with the \texttt{base_size} and \texttt{bracket_base_size} arguments, but left in to show function implementation. 
 
-```{r CrI-visualization, out.width= "50%"}
+```{r CrI-visualization, out.width= "100%"}
 inclusion <- local_credible(HS_group_offset_space$Beta, local.p.ths = 0.95)  # 0/1 vector
 tp <- sum(inclusion[nonNull_indices_p200_Case2]) # truly nonnulls detected 
 fn <- length(nonNull_indices_p200_Case2) - tp   # truly nonnulls not detected
