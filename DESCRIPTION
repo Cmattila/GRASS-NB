@@ -1,0 +1,43 @@
+Package: MUSC
+Title: Bayesian Variable Selection for Spatially Indexed Count Data
+Version: 0.0.0.9000
+Authors@R: c(
+    person(given = "Chloe", family = "Mattila", email = "chloemeiann@gmail.com", role = c("aut", "cre")),
+    person("Elizabeth", "Hill", role = "aut"),
+    person("Brian", "Neelon", role = "aut"),
+    person("Souvik", "Seal", role = "aut")
+    )
+Description: Bayesian variable selection for regression of negative binomial (overdispersed) spatially indexed count data with and without feature grouping using horseshoe, spike and slab, or when grouping the multi-level group extensions of horseshoe or spike and slab. 
+License: GPL-2
+Encoding: UTF-8
+Imports: 
+    svMisc,
+    spam,
+    MCMCpack,
+    Matrix,
+    spdep,
+    BayesLogit,
+    coda,
+    bayestestR,
+    ggplot2,
+    dplyr,
+    grid,
+    stats,
+    graphics,
+    utils, 
+    rlang
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+Suggests: 
+    testthat (>= 3.0.0),
+    readxl,
+    tidyr,
+    stringr,
+    purrr,
+    forcats,
+    scales,
+    patchwork,
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
+Config/testthat/edition: 3
