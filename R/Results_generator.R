@@ -210,7 +210,6 @@ plot_cri_across_outcomes <- function(
     add_brackets = TRUE,
     legend_title = "Outcome",
     show_legend = NULL,
-    verbose = TRUE
     verbose = TRUE,
     base_size = 22
 ){
@@ -236,7 +235,6 @@ plot_cri_across_outcomes <- function(
   }
 
   # ---- Helpers ----
-  normalize_beta <- function(M, preds, intercept_names){
   normalize_beta <- function(M, preds, intercept_names) {
     M <- as.matrix(M)
     if (is.null(colnames(M))) stop("Beta matrix must have column names.")
@@ -287,7 +285,6 @@ plot_cri_across_outcomes <- function(
     offset_bracket = 0.06,  # fraction of span below min
     offset_text    = 0.10,
     tick_frac      = 0.02,
-    line_col = "grey35", line_size = 0.6, text_size = 6
     line_col = "grey35", line_size = 0.6, text_size = 4.5
   ){
     yr <- range(c(data_df$q_low, data_df$q_high, data_df$mean, data_df$median), na.rm = TRUE)
