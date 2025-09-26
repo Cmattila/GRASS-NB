@@ -3,6 +3,7 @@
 #' @param Beta is a dataframe of dimension (niter x N) with MCMC beta samples, for N spatial units
 #' @param local.p.ths is the size of the CI for each location
 #' @return a N x 1 vector of 0/1, depending on the CI for a location contains 0 or not.
+#' @importFrom bayestestR ci
 #'
 #' @export
 #'
@@ -41,6 +42,7 @@ local_credible <-function(Beta, local.p.ths = 0.9){
 #'  # MCMC_plot(samples, main = "beta_4", legend_pos = "bottomright", col_trace = "blue")
 #' }
 #'
+#' @importFrom graphics plot abline legend
 #' @importFrom coda as.mcmc effectiveSize geweke.diag
 #' @importFrom stats pnorm
 #' @export
@@ -137,6 +139,7 @@ MCMC_plot <- function(
 #' @param legend_title Character; title for the outcome legend (default "Outcome").
 #' @param show_legend NULL (auto: hide if one outcome), TRUE, or FALSE.
 #' @param verbose Logical; print brief diagnostics.
+#' @param base_size Base font size for theme (default 22).
 #'
 #' @return List with:
 #' \item{plot}{ggplot object}
@@ -208,6 +211,8 @@ plot_cri_across_outcomes <- function(
     legend_title = "Outcome",
     show_legend = NULL,
     verbose = TRUE
+    verbose = TRUE,
+    base_size = 22
 ){
   if (!requireNamespace("bayestestR", quietly = TRUE))
     stop("Package 'bayestestR' is required. Please install it.")
@@ -232,12 +237,42 @@ plot_cri_across_outcomes <- function(
 
   # ---- Helpers ----
   normalize_beta <- function(M, preds, intercept_names){
+  normalize_beta <- function(M, preds, intercept_names) {
     M <- as.matrix(M)
     if (is.null(colnames(M))) stop("Beta matrix must have column names.")
+
+    # --- auto-fix orientation if names live on rows (common p x n_iter) ---
+    rn <- rownames(M); cn <- colnames(M)
+    rn_match <- if (!is.null(rn)) sum(rn %in% preds) else 0
+    cn_match <- if (!is.null(cn)) sum(cn %in% preds) else 0
+    if (rn_match > cn_match) {
+      M <- t(M)
+      cn <- colnames(M)
+    }
+
+    # --- if no column names, infer them from predictors (+ optional intercept) ---
+    if (is.null(colnames(M))) {
+      if (ncol(M) == length(preds)) {
+        colnames(M) <- preds
+      } else if (ncol(M) == length(preds) + 1) {
+        # assume an intercept column exists (first)
+        colnames(M) <- c("(Intercept)", preds)
+      } else {
+        stop(sprintf(
+          "Cannot infer beta column names (ncol=%d; |predictors|=%d).",
+          ncol(M), length(preds)
+        ))
+      }
+    }
+
+    # --- drop intercept-like columns by name, if present ---
     keep <- !(colnames(M) %in% intercept_names)
     M <- M[, keep, drop = FALSE]
+
+    # --- align to requested predictors; fill missing with NA (will plot as gaps) ---
     common  <- intersect(preds, colnames(M))
     missing <- setdiff(preds, colnames(M))
+
     M2 <- cbind(
       M[, common, drop = FALSE],
       if (length(missing)) matrix(NA_real_, nrow(M), length(missing),
@@ -246,12 +281,14 @@ plot_cri_across_outcomes <- function(
     M2[, preds, drop = FALSE]
   }
 
+
   add_group_brackets_scaled_ <- function(
     p, data_df,
     offset_bracket = 0.06,  # fraction of span below min
     offset_text    = 0.10,
     tick_frac      = 0.02,
     line_col = "grey35", line_size = 0.6, text_size = 6
+    line_col = "grey35", line_size = 0.6, text_size = 4.5
   ){
     yr <- range(c(data_df$q_low, data_df$q_high, data_df$mean, data_df$median), na.rm = TRUE)
     span <- diff(yr); if (!is.finite(span) || span <= 0) span <- max(1, abs(yr[1L]))
@@ -400,12 +437,17 @@ plot_cri_across_outcomes <- function(
       color = legend_title
     ) +
     ggplot2::theme_minimal(base_size = 18) +
+    ggplot2::theme_minimal(base_size = base_size) +
     ggplot2::theme(
       legend.position = if (legend_on) "bottom" else "none",
       legend.box = "horizontal",
       axis.text.x = ggplot2::element_text(angle = 65, hjust = 1),
+      # axis.text.x = ggplot2::element_text(angle = 65, hjust = 1),
       panel.grid.minor.x = ggplot2::element_blank(),
       panel.grid.major.x = ggplot2::element_blank(),
+      axis.text.x = ggplot2::element_text(angle = 40, hjust = 1),
+      axis.ticks.x = ggplot2::element_line(color = "grey50"),
+      axis.ticks.length.x = grid::unit(3, "pt"),
       panel.background   = ggplot2::element_rect(fill = "white", color = NA),
       plot.background    = ggplot2::element_rect(fill = "white", color = NA),
       legend.background  = ggplot2::element_rect(fill = "white", color = NA),
@@ -436,18 +478,22 @@ plot_cri_across_outcomes <- function(
 }
 
 
+
 #' @title Plot PIPs (pDelta) from MCMC outputs
 #' @description
 #' Plot Posterior Inclusion Probabilities (PIPs) per predictor, across one or more
 #' outcomes, computed as column means of MCMC indicator matrices. Supply either:
 #' (i) a single matrix `pdelta_mat` (iterations × predictors) with an `outcome_name`,
+#' (i) a single matrix `pdelta_mat` (iterations x predictors) with an `outcome_name`,
 #' or (ii) a named list `pdelta_list` of such matrices (one per outcome).
 #' The argument `predictors` fixes x-axis order and inclusion.
 #'
 #' @param predictors Character vector of predictor keys (defines x-axis order/inclusion).
 #' @param pdelta_mat Optional numeric matrix (iterations × predictors) for a single outcome.
+#' @param pdelta_mat Optional numeric matrix (iterations x predictors) for a single outcome.
 #' @param outcome_name Optional single character label for `pdelta_mat` (required if `pdelta_mat` is used).
 #' @param pdelta_list Optional **named list** of numeric matrices (iterations × predictors), one per outcome.
+#' @param pdelta_list Optional **named list** of numeric matrices (iterations x predictors), one per outcome.
 #'   List names are used as outcome labels. If provided, `pdelta_mat`/`outcome_name` are ignored.
 #' @param outcomes Optional character vector to subset outcomes (must match names in `pdelta_list`
 #'   or `outcome_name` for the single-matrix case).
@@ -497,6 +543,8 @@ plot_cri_across_outcomes <- function(
 #'   pdelta_list      = pdelta_list,
 #'   predictor_labels = setNames(toupper(predictors), predictors),
 #'   group_map        = c(x1="Demog", x2="Demog", x3="Behavior", x4="Behavior", x5="Access", x6="Access"),
+#'   group_map = c(x1="Demog", x2="Demog", x3="Behavior",
+#'   x4="Behavior", x5="Access", x6="Access"),
 #'   group_levels     = c("Demog","Behavior","Access"),
 #'   thresholds       = c(0.5, 0.9),
 #'   legend_title     = "Cancer"
@@ -552,6 +600,7 @@ plot_pdelta_bars_mcmc <- function(
     built <- lapply(names(list_use), function(out) {
       mat <- list_use[[out]]
       if (!is.matrix(mat)) stop("Each element of `pdelta_list` must be a matrix (iterations × predictors).")
+      if (!is.matrix(mat)) stop("Each element of `pdelta_list` must be a matrix (iterations x predictors).")
       if (ncol(mat) != length(predictors)) {
         stop(sprintf("Outcome '%s': ncol(matrix) = %d != length(predictors) = %d",
                      out, ncol(mat), length(predictors)))
@@ -570,6 +619,7 @@ plot_pdelta_bars_mcmc <- function(
       stop("Provide a single `outcome_name` when using `pdelta_mat`.")
     }
     if (!is.matrix(pdelta_mat)) stop("`pdelta_mat` must be a matrix (iterations × predictors).")
+    if (!is.matrix(pdelta_mat)) stop("`pdelta_mat` must be a matrix (iterations x predictors).")
     if (ncol(pdelta_mat) != length(predictors)) {
       stop(sprintf("ncol(pdelta_mat) = %d != length(predictors) = %d",
                    ncol(pdelta_mat), length(predictors)))
