@@ -24,6 +24,8 @@ plot_cri_across_outcomes(
   legend_title = "Outcome",
   show_legend = NULL,
   verbose = TRUE
+  verbose = TRUE,
+  base_size = 22
 )
 }
 \arguments{
@@ -70,6 +72,8 @@ a named vector mapping pretty outcome names -> colors.}
 \item{show_legend}{NULL (auto: hide if one outcome), TRUE, or FALSE.}
 
 \item{verbose}{Logical; print brief diagnostics.}
+
+\item{base_size}{Base font size for theme (default 22).}
 }
 \value{
 List with:
