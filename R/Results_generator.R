@@ -462,7 +462,7 @@ plot_cri_across_outcomes <- function(
 
   # Group brackets (scaled to data range so they don't get clipped)
   if (add_brackets && use_groups && !is.null(group_map)) {
-    p <- add_group_brackets_scaled_(p, df_all)
+    p <- add_group_brackets_scaled_(p, df_all,text_size = bracket_text_size)
   }
 
   list(plot = p, data = df_all, loaded = diag_loaded, skipped = diag_skipped)
@@ -754,7 +754,7 @@ plot_pdelta_bars_mcmc <- function(
 
   # ---- optional group brackets
   if (use_groups && !is.null(group_map)) {
-    p <- add_group_brackets_scaled_(p, d)
+    p <- add_group_brackets_scaled_(p, d, text_size = bracket_text_size)
   }
 
   list(plot = p, data = d)

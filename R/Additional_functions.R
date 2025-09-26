@@ -47,6 +47,7 @@ generate_nonnull_indices <- function(p, group_ind, num_nonnull,
 
     for (k in 1:length(group_ids)) {
       group_combos <- combn(group_ids, k, simplify = FALSE)
+      group_combos <- utils::combn(group_ids, k, simplify = FALSE)
       for (grp_set in group_combos) {
         total_size <- sum(Mg[grp_set])
         if (total_size == num_nonnull) {
@@ -101,6 +102,7 @@ generate_nonnull_indices <- function(p, group_ind, num_nonnull,
 #' @param nonNull_indices Indices in \code{2:p} set to non-null.
 #' @param signal_vec Signal values to assign at \code{nonNull_indices}.
 #'
+#' @importFrom mvnfast rmvn
 #' @return A list containing \code{beta_true}, \code{X}, \code{K}, and related metadata.
 #' @export
 feature_sim_grouped <- function(N, p, group_ind, AR = 0.25,
@@ -168,6 +170,7 @@ y_gen_fun <- function(N, K, r=1, beta_true, Scale = NULL, phi_true, offset = NUL
   q <- 1-psi                   # Note: rnbinom models q=1-p
   q[q < 1e-5] <- 1e-5
   y <- rnbinom(N,r,q)
+  y <- stats::rnbinom(N,r,q)
   return(list(y=y, Scale = Scale))
 }
 
@@ -202,6 +205,7 @@ generate_group_ind <- function(p, G) {
 #' @param Q Precision matrix (e.g., ICAR).
 #' @param n_space Dimension of the spatial domain.
 #'
+#' @importFrom spam rmvnorm.canonical
 #' @return A list of centered \code{phi} vectors, one per \code{nu}.
 #' @export
 phi_True_func <- function(nu_vals, Q, n_space) {
@@ -213,11 +217,13 @@ phi_True_func <- function(nu_vals, Q, n_space) {
 
     # Sample one phi ~ MVN_canonical(0, Lambda)
     phi <- rmvnorm.canonical(1, b = rep(0, n_space), Q = as.matrix(Lambda))
+    phi <- spam::rmvnorm.canonical(1, b = rep(0, n_space), Q = as.matrix(Lambda))
     phi <- as.numeric(phi - mean(phi))  # Sum-to-zero constraint
 
     # Store with informative name
     result[[paste0("phi_nu_", nu)]] <- phi
     cat("nu =", nu, "phi range =", range(phi), "actual SD =", sd(phi), "\n")
+    cat("nu =", nu, "phi range =", range(phi), "actual SD =", stats::sd(phi), "\n")
   }
 
   return(result)
