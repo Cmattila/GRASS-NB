@@ -41,3 +41,5 @@ Suggests:
     rmarkdown
 VignetteBuilder: knitr
 Config/testthat/edition: 3
+URL: https://github.com/Cmattila/MUSC
+BugReports: https://github.com/Cmattila/MUSC/issues
