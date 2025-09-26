@@ -12,11 +12,12 @@ License: GPL-2
 Encoding: UTF-8
 Imports: 
     svMisc,
+    BayesLogit,
     spam,
     MCMCpack,
     Matrix,
     spdep,
-    BayesLogit,
+    mvnfast,
     coda,
     bayestestR,
     ggplot2,
