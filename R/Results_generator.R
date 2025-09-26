@@ -140,6 +140,7 @@ MCMC_plot <- function(
 #' @param show_legend NULL (auto: hide if one outcome), TRUE, or FALSE.
 #' @param verbose Logical; print brief diagnostics.
 #' @param base_size Base font size for theme (default 22).
+#' @param bracket_text_size Font size for the group names (default 4.5, different scale then base_size)
 #'
 #' @return List with:
 #' \item{plot}{ggplot object}
@@ -211,7 +212,8 @@ plot_cri_across_outcomes <- function(
     legend_title = "Outcome",
     show_legend = NULL,
     verbose = TRUE,
-    base_size = 22
+    base_size = 22,
+    bracket_text_size =4.5
 ){
   if (!requireNamespace("bayestestR", quietly = TRUE))
     stop("Package 'bayestestR' is required. Please install it.")
@@ -235,48 +237,42 @@ plot_cri_across_outcomes <- function(
   }
 
   # ---- Helpers ----
-  normalize_beta <- function(M, preds, intercept_names) {
+  normalize_beta <- function(M, predictors, intercept_names) {
     M <- as.matrix(M)
-    if (is.null(colnames(M))) stop("Beta matrix must have column names.")
 
-    # --- auto-fix orientation if names live on rows (common p x n_iter) ---
-    rn <- rownames(M); cn <- colnames(M)
-    rn_match <- if (!is.null(rn)) sum(rn %in% preds) else 0
-    cn_match <- if (!is.null(cn)) sum(cn %in% preds) else 0
-    if (rn_match > cn_match) {
-      M <- t(M)
-      cn <- colnames(M)
-    }
-
-    # --- if no column names, infer them from predictors (+ optional intercept) ---
+    # If no names, infer from predictors (+ optional intercept)
     if (is.null(colnames(M))) {
-      if (ncol(M) == length(preds)) {
-        colnames(M) <- preds
-      } else if (ncol(M) == length(preds) + 1) {
-        # assume an intercept column exists (first)
-        colnames(M) <- c("(Intercept)", preds)
+      if (ncol(M) == length(predictors)) {
+        colnames(M) <- predictors
+      } else if (ncol(M) == length(predictors) + 1) {
+        colnames(M) <- c("(Intercept)", predictors)
       } else {
-        stop(sprintf(
-          "Cannot infer beta column names (ncol=%d; |predictors|=%d).",
-          ncol(M), length(preds)
-        ))
+        stop(sprintf("Cannot infer beta column names (ncol=%d; |predictors|=%d).",
+                     ncol(M), length(predictors)))
       }
     }
 
-    # --- drop intercept-like columns by name, if present ---
+    # orientation check still works
+    rn <- rownames(M); cn <- colnames(M)
+    rn_match <- if (!is.null(rn)) sum(rn %in% predictors) else 0
+    cn_match <- if (!is.null(cn)) sum(cn %in% predictors) else 0
+    if (rn_match > cn_match) {
+      M <- t(M)
+    }
+
+    # drop intercept-like
     keep <- !(colnames(M) %in% intercept_names)
     M <- M[, keep, drop = FALSE]
 
-    # --- align to requested predictors; fill missing with NA (will plot as gaps) ---
-    common  <- intersect(preds, colnames(M))
-    missing <- setdiff(preds, colnames(M))
-
+    # align to predictors, fill gaps
+    common  <- intersect(predictors, colnames(M))
+    missing <- setdiff(predictors, colnames(M))
     M2 <- cbind(
       M[, common, drop = FALSE],
       if (length(missing)) matrix(NA_real_, nrow(M), length(missing),
                                   dimnames = list(NULL, missing)) else NULL
     )
-    M2[, preds, drop = FALSE]
+    M2[, predictors, drop = FALSE]
   }
 
 
@@ -285,7 +281,7 @@ plot_cri_across_outcomes <- function(
     offset_bracket = 0.06,  # fraction of span below min
     offset_text    = 0.10,
     tick_frac      = 0.02,
-    line_col = "grey35", line_size = 0.6, text_size = 4.5
+    line_col = "grey35", line_size = 0.6, text_size = bracket_text_size
   ){
     yr <- range(c(data_df$q_low, data_df$q_high, data_df$mean, data_df$median), na.rm = TRUE)
     span <- diff(yr); if (!is.finite(span) || span <= 0) span <- max(1, abs(yr[1L]))
@@ -438,8 +434,6 @@ plot_cri_across_outcomes <- function(
     ggplot2::theme(
       legend.position = if (legend_on) "bottom" else "none",
       legend.box = "horizontal",
-      axis.text.x = ggplot2::element_text(angle = 65, hjust = 1),
-      # axis.text.x = ggplot2::element_text(angle = 65, hjust = 1),
       panel.grid.minor.x = ggplot2::element_blank(),
       panel.grid.major.x = ggplot2::element_blank(),
       axis.text.x = ggplot2::element_text(angle = 40, hjust = 1),
@@ -513,6 +507,7 @@ plot_cri_across_outcomes <- function(
 #' @param dodge_width Dodge width for grouped bars (default 0.8).
 #' @param base_size Base font size for theme (default 22).
 #' @param verbose Logical; print brief diagnostics (default TRUE).
+#' @param bracket_text_size Font size for the group names (default 4.5, different scale then base_size)
 #'
 #' @return A list with \item{plot}{ggplot object} and \item{data}{data.frame used for plotting}.
 #'
@@ -576,7 +571,8 @@ plot_pdelta_bars_mcmc <- function(
     bar_width       = 0.75,
     dodge_width     = 0.8,
     base_size       = 22,
-    verbose         = TRUE
+    verbose         = TRUE,
+    bracket_text_size = 4.5
 ){
   x_order   <- match.arg(x_order)
   use_groups <- isTRUE(use_groups)
@@ -768,7 +764,7 @@ plot_pdelta_bars_mcmc <- function(
 add_group_brackets_scaled_ <- function(
     p, data_df,
     y_frac = 0.10, tick_frac = 0.04, text_frac = 0.15,
-    line_col = "grey35", line_size = 0.6, text_size = 4.5
+    line_col = "grey35", line_size = 0.6, text_size = bracket_text_size
 ){
   ymax <- max(data_df$pDelta, na.rm = TRUE); if (!is.finite(ymax) || ymax <= 0) ymax <- 1
   y_min  <- -y_frac  * ymax
