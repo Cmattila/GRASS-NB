@@ -18,13 +18,14 @@ and Souvik Seal
 
 </td>
 
-<td style="text-align:right; width:1%; white-space:nowrap;">
+<!-- <td style="text-align:right; width:1%; white-space:nowrap;"> -->
 
-<!-- invisible spacer: keeps layout, not visible -->
+<!--   <!-- invisible spacer: keeps layout, not visible -->
 
-<span aria-hidden="true"
-style="display:inline-block; width:140px; height:150px; opacity:0;"></span>
-<!-- later: <img src="MUSC_logo.png" alt="MUSC logo" style="height:150px; width:auto;"> -->
+–\>
+<td style="text-align:right; padding-left:400px;">
+
+<img src="MUSC_logo_simple.png" width="140" height="150"/>
 </td>
 
 </tr>
@@ -158,6 +159,7 @@ nis <- rep(1,N) # assuming no repeated measures
 scale = 100000
 pop <- sample(10000:50000, N, TRUE)
 
+set.seed(2025)
  
 yy <- y_gen_fun(N = N, r = 1, K = Features$K, beta_true = Features$beta_true, phi_true = phi$phi_nu_0.1, Scale = scale, pop_col = pop, offset = TRUE)
 ```
@@ -165,17 +167,19 @@ yy <- y_gen_fun(N = N, r = 1, K = Features$K, beta_true = Features$beta_true, ph
 ## Fit the SS and HS grouped varible selection models
 
 The main function of “MUSC” fits negative binomial models using either
-the standard horseshoe prior () or spike and slab prior (), or their
-grouped extensions (specifying the vector of group indicators; ).
-Additionally, these models can be specified to include a spatial random
-effect (specifying the neighborhood list, an object of class ; ). $X$
+the standard horseshoe prior (which.prior = “HS”) or spike and slab
+prior (which.prior = “SS”), or their grouped extensions (specifying the
+vector of group indicators; *group_ind*). Additionally, these models can
+be specified to include a spatial random effect (specifying the
+neighborhood list, an object of class *nb*; *NeighborhoodList*). $X$
 denotes the matrix of spatial-unit-level features (dimension
-$N\times p-1$). denotes the number of MCMC iterations. is the vector of
-the population for each spatial unit and is the desired scale for the
-rates (i.e. per 100,000). Note, for SS with $p=200$, this will take a
-bit of time.
+$N\times p-1$). *niter* denotes the number of MCMC iterations.*pop_col*
+is the vector of the population for each spatial unit and *scale* is the
+desired scale for the rates (i.e. per 100,000). Note, for SS with
+$p=200$, this will take a bit of time.
 
 ``` r
+set.seed(2025)
 
 SS_group_offset_space <- MUSC(X = Features$X,                 # feature matrix
                               y = yy$y,                        # outcome vector
@@ -190,14 +194,14 @@ SS_group_offset_space <- MUSC(X = Features$X,                 # feature matrix
 
 print(str(SS_group_offset_space)) # check the returned list object
 # List of 9
-#  $ Beta  : num [1:2500, 1:200] 3.93 2.87 1.97 1.88 0.76 ...
-#  $ r     : num [1:2500, 1] 0.111 0.107 0.153 0.175 0.164 ...
+#  $ Beta  : num [1:2500, 1:200] 5.35 5.34 5.89 5.99 6.18 ...
+#  $ r     : num [1:2500, 1] 0.1041 0.1135 0.0771 0.0864 0.0854 ...
 #  $ Delta : num [1:2500, 1:200] 1 1 1 1 1 1 1 1 1 1 ...
 #  $ pDelta: num [1:2500, 1:200] 1 1 1 1 1 1 1 1 1 1 ...
-#  $ phi   : num [1:2500, 1:100] 0.2348 0.0724 0.0114 -0.1822 -0.0246 ...
-#  $ sphiSq: num [1:2500, 1] 0.0573 0.064 0.0551 0.0591 0.047 ...
-#  $ Zeta2 : num [1:2500, 1] 0.888 1.065 1.401 2.241 1.598 ...
-#  $ Tau2  : num [1:2500, 1:40] 4.8205 4.725 0.3571 0.0388 0.7403 ...
+#  $ phi   : num [1:2500, 1:100] 1.01 1.23 -2.69 2.23 -2.79 ...
+#  $ sphiSq: num [1:2500, 1] 2.92 3.03 3.71 4.33 4.39 ...
+#  $ Zeta2 : num [1:2500, 1] 0.0459 0.0423 0.0487 0.0481 0.0515 ...
+#  $ Tau2  : num [1:2500, 1:40] 1.694 1.45 0.848 0.501 0.504 ...
 #  $ Lambda: num [1:2500, 1:199] 0 0 0 0 0 0 0 0 0 0 ...
 # NULL
 
@@ -214,23 +218,23 @@ HS_group_offset_space <- MUSC(X = Features$X,                 # feature matrix
 
 print(str(HS_group_offset_space)) # check the returned list object
 # List of 9
-#  $ Beta  : num [1:2500, 1:200] 2.78 2.52 2.83 3 3.57 ...
-#  $ r     : num [1:2500, 1] 0.15 0.166 0.147 0.183 0.158 ...
+#  $ Beta  : num [1:2500, 1:200] 4.39 4.56 3.74 3.1 2.99 ...
+#  $ r     : num [1:2500, 1] 0.0878 0.0927 0.122 0.1258 0.1331 ...
 #  $ Delta : num [1:2500, 1:200] 1 1 1 1 1 1 1 1 1 1 ...
 #  $ pDelta: num [1:2500, 1:200] 1 1 1 1 1 1 1 1 1 1 ...
-#  $ phi   : num [1:2500, 1:100] -0.3857 -0.3148 -0.1381 -0.318 0.0931 ...
-#  $ sphiSq: num [1:2500, 1] 0.272 0.248 0.315 0.331 0.306 ...
-#  $ Zeta2 : num [1:2500, 1] 0.195 0.223 0.257 0.257 0.225 ...
-#  $ Tau2  : num [1:2500, 1:40] 0.00853 0.00676 0.00674 0.00674 0.00674 ...
-#  $ Lambda: num [1:2500, 1:199] 0.215 1.807 1.764 3.666 44.272 ...
+#  $ phi   : num [1:2500, 1:100] -1.412 0.544 0.119 -1.035 -2.512 ...
+#  $ sphiSq: num [1:2500, 1] 1.65 1.7 1.88 1.83 3.32 ...
+#  $ Zeta2 : num [1:2500, 1] 0.0157 0.0182 0.023 0.0183 0.0181 ...
+#  $ Tau2  : num [1:2500, 1:40] 2.085 0.536 0.818 0.945 0.765 ...
+#  $ Lambda: num [1:2500, 1:199] 188.138 272.065 88.697 133.647 0.969 ...
 # NULL
 ```
 
 ## MCMC convergence plots
 
 The above function returns a list of several objects, including a matrix
-of the post-burn-in posterior beta estimates, with dimension $\times p$.
-We randomly select 4 betas and plot their convergence.
+of the post-burn-in posterior beta estimates, with dimension *niter*
+$\times p$. We randomly select 4 betas and plot their convergence.
 
 ``` r
 set.seed(2025)
@@ -260,8 +264,9 @@ MCMC_plot(HS_group_offset_space$Beta[, (ran_sam[4])], main = "HS - beta 26", col
 
 Display the posterior inclusion probability (PIP) of each beta with a
 selection threshold of $0.75$ for the SS based model. Here with so many
-features, the text size is a but small for legibility and a bit crowded,
-further adjustments needed with the and arguments, but left in to show
+features, the text size was set quite small and remains a bit crowded
+for the current plotting ratio, further adjustments needed with the
+*base_size* and *bracket_base_size* arguments, but left in to show
 function implementation.
 
 ``` r
@@ -310,9 +315,10 @@ print(res$plot)
 
 Display the 95% ETI CrI of each beta for the HS based model. Within the
 plot, along the x-axis are the names of the features and above are their
-respective groups. Here with so many features, the text size is a small
-for legibility and a bit crowded, further adjustments needed with the
-and arguments, but left in to show function implementation.
+respective groups. Here with so many features, the text size was set
+quite small and remains a bit crowded for the current plotting ratio,
+further adjustments needed with the *base_size* and *bracket_base_size*
+arguments, but left in to show function implementation.
 
 ``` r
 inclusion <- local_credible(HS_group_offset_space$Beta, local.p.ths = 0.95)  # 0/1 vector
