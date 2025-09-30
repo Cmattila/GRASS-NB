@@ -144,18 +144,21 @@ SS_group_offset_space <- MUSC(X = Features$X,                 # feature matrix
                               pop_col = pop,                  # vector of spatial unit populations
                               scale = scale,                  # rate scale
                               which.prior = "SS",             # method
-                              niter = 8000)                  # MCMC iterations; use more in practice, brief here for speed 
+                              niter = 10000,                  # MCMC iterations; use more in practice, brief here for speed
+                              verbose = FALSE)                # not printing MCMC iteration progress  
 
 print(str(SS_group_offset_space)) # check the returned list object
 
+
 HS_group_offset_space <- MUSC(X = Features$X,                 # feature matrix
-                              y = yy$y,                        # outcome vector
+                              y = yy$y,                       # outcome vector
                               group_ind =  group_ind,         # group indicator vector
                               NeighborhoodList = nb100,       # Neighborhood list
                               pop_col = pop,                  # vector of spatial unit populations
                               scale = scale,                  # rate scale
                               which.prior = "HS",             # method
-                              niter = 8000)                  # MCMC iterations; use more in practice, brief here for speed 
+                              niter = 10000,                  # MCMC iterations; use more in practice, brief here for speed
+                              verbose = FALSE)                # not printing MCMC iteration progress   
 
 print(str(HS_group_offset_space)) # check the returned list object
 ```
