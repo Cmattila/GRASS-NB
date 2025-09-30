@@ -83,7 +83,7 @@ A list with \item{plot}{ggplot object} and \item{data}{data.frame used for plott
 \description{
 Plot Posterior Inclusion Probabilities (PIPs) per predictor, across one or more
 outcomes, computed as column means of MCMC indicator matrices. Supply either:
-(i) a single matrix \code{pdelta_mat} (iterations × predictors) with an \code{outcome_name},
+(i) a single matrix \code{pdelta_mat} (iterations x predictors) with an \code{outcome_name},
 (i) a single matrix \code{pdelta_mat} (iterations x predictors) with an \code{outcome_name},
 or (ii) a named list \code{pdelta_list} of such matrices (one per outcome).
 The argument \code{predictors} fixes x-axis order and inclusion.
@@ -111,7 +111,6 @@ res2 <- plot_pdelta_bars_mcmc(
   predictors       = predictors,
   pdelta_list      = pdelta_list,
   predictor_labels = setNames(toupper(predictors), predictors),
-  group_map        = c(x1="Demog", x2="Demog", x3="Behavior", x4="Behavior", x5="Access", x6="Access"),
   group_map = c(x1="Demog", x2="Demog", x3="Behavior",
   x4="Behavior", x5="Access", x6="Access"),
   group_levels     = c("Demog","Behavior","Access"),

@@ -8,8 +8,8 @@ MCMC_plot(
   x,
   main = NULL,
   legend_pos = "topright",
-  col_trace = "green",
-  col_mean = "black",
+  col_trace = "black",
+  col_mean = "green",
   lwd = 1,
   cex_leg = 0.9,
   ylim = NULL
