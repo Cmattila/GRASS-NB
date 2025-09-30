@@ -144,7 +144,7 @@ SS_group_offset_space <- MUSC(X = Features$X,                 # feature matrix
                               pop_col = pop,                  # vector of spatial unit populations
                               scale = scale,                  # rate scale
                               which.prior = "SS",             # method
-                              niter = 10000)                  # MCMC iterations; use more in practice, brief here for speed 
+                              niter = 8000)                  # MCMC iterations; use more in practice, brief here for speed 
 
 print(str(SS_group_offset_space)) # check the returned list object
 
@@ -155,7 +155,7 @@ HS_group_offset_space <- MUSC(X = Features$X,                 # feature matrix
                               pop_col = pop,                  # vector of spatial unit populations
                               scale = scale,                  # rate scale
                               which.prior = "HS",             # method
-                              niter = 10000)                  # MCMC iterations; use more in practice, brief here for speed 
+                              niter = 8000)                  # MCMC iterations; use more in practice, brief here for speed 
 
 print(str(HS_group_offset_space)) # check the returned list object
 ```
@@ -180,7 +180,7 @@ MCMC_plot(HS_group_offset_space$Beta[, (ran_sam[4])], main = "HS - beta 26")
 
 ## Visualize the posterior inclusion probablities (PIP) for SS
 
-Display the posterior inclusion probability (PIP) of each beta with a selection threshold of $0.75$ for the SS based model.
+Display the posterior inclusion probability (PIP) of each beta with a selection threshold of $0.75$ for the SS based model. Within the plot, along the x-axis are the names of the features and above are their respective groups and the truly non-null features are highlighted.
 
 ```{r PIP-visualization, out.width= "100%"}
 post_means <- colMeans(SS_group_offset_space$pDelta)
@@ -244,7 +244,7 @@ print(res_highlight$plot)
 
 ## Visualize the 95% equal-tail interval based credible intervals for HS
 
-Display the 95% ETI CrI of each beta for the HS based model. Within the plot, along the x-axis are the names of the features and above are their respective groups.
+Display the 95% ETI CrI of each beta for the HS based model. Within the plot, along the x-axis are the names of the features and above are their respective groups and the truly non-null features are highlighted.
 
 ```{r CrI-visualization, out.width= "100%"}
 inclusion <- local_credible(HS_group_offset_space$Beta, local.p.ths = 0.95)  # 0/1 vector
@@ -260,7 +260,7 @@ predictor_labels <- predictors                     # or swap in pretty labels if
 
 # Group labels: map each predictor to its group id (1..G)
 # group_ind is length p-1, aligned to predictors
-group_map <- setNames(paste0( group_ind), predictors)
+group_map <- setNames(paste0(group_ind), predictors)
 group_levels <- paste0( sort(unique(group_ind)))  # order under x-axis
 
 #plotting in uniform color
@@ -299,9 +299,9 @@ res_HS_highlight <- plot_cri_highlights(
   x_order = "group",
   highlight_idx = (nonNull_indices_p50_Case2-1),
   verbose         = TRUE,
-  base_size       = 12, 
+  base_size       = 11, 
   colors = "darkgreen",
-  bracket_text_size = 3
+  bracket_text_size = 4
 )
 print(res_HS_highlight$plot)
 ```
