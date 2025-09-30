@@ -26,6 +26,7 @@ ar1_cor <- function(n, rho) {
 #' @param nonnull_group_structure One of \code{c("Case1","Case2")}. See details.
 #' @param per_group_nonnull Target number of non-nulls per group in \code{Case2}.
 #'
+#' @importFrom utils combn
 #' @return Integer vector of sorted non-null indices in \code{2:p}.
 #' @export
 generate_nonnull_indices <- function(p, group_ind, num_nonnull,
@@ -46,7 +47,6 @@ generate_nonnull_indices <- function(p, group_ind, num_nonnull,
     group_ids <- as.character(sort(unique(group_ind)))
 
     for (k in 1:length(group_ids)) {
-      group_combos <- combn(group_ids, k, simplify = FALSE)
       group_combos <- utils::combn(group_ids, k, simplify = FALSE)
       for (grp_set in group_combos) {
         total_size <- sum(Mg[grp_set])
@@ -169,7 +169,6 @@ y_gen_fun <- function(N, K, r=1, beta_true, Scale = NULL, phi_true, offset = NUL
   psi <- exp(eta)/(1+exp(eta)) # Prob of success
   q <- 1-psi                   # Note: rnbinom models q=1-p
   q[q < 1e-5] <- 1e-5
-  y <- rnbinom(N,r,q)
   y <- stats::rnbinom(N,r,q)
   return(list(y=y, Scale = Scale))
 }
@@ -222,7 +221,6 @@ phi_True_func <- function(nu_vals, Q, n_space) {
 
     # Store with informative name
     result[[paste0("phi_nu_", nu)]] <- phi
-    cat("nu =", nu, "phi range =", range(phi), "actual SD =", sd(phi), "\n")
     cat("nu =", nu, "phi range =", range(phi), "actual SD =", stats::sd(phi), "\n")
   }
 
