@@ -417,7 +417,7 @@ res_HS_highlight <- plot_cri_highlights(
   x_order = "group",
   highlight_idx = (nonNull_indices_p50_Case2-1),
   verbose         = TRUE,
-  base_size       = 11, 
+  base_size       = 12, 
   colors = "darkgreen",
   bracket_text_size = 4
 )
