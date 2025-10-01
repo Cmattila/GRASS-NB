@@ -49,7 +49,7 @@ MUSC <- function(X, y, group_ind = NULL, NeighborhoodList = NULL, which.prior = 
   if (!is.null(group_ind) && length(group_ind) != ncol(X)) stop("Length of group_ind and number of columns of X do not match.")
 
   # class check for NeighborhoodList
-  if (!inherits(NeighborhoodList, "nb")) {
+  if (!is.null(NeighborhoodList) & !inherits(NeighborhoodList, "nb")) {
     stop("'NeighborhoodList' must be an object of class 'nb' (e.g., from spdep::poly2nb).")
   }
 

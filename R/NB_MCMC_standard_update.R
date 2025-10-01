@@ -38,7 +38,7 @@ VS_Standard <- function(K, y, NeighborhoodList, which.prior,niter, verbose, pop_
   # Storage objects
   Beta <- matrix(0,lastit,p)              # store betas
   Delta <- pDelta<-matrix(0,lastit,p)     # store SS inclusion indicator and probability of inclusion
-  Lambda <- matrix(0,lastit,p)            # store local shrinkage parameters
+  Lambda <- matrix(0,lastit,p-1)            # store local shrinkage parameters
   Tau2 <- matrix(0,lastit,1)                # store global shrinkage parameter
   R <- matrix(0,lastit,1)                 # store over-dispersion parameter
   Sphi.sq <- matrix(0,lastit,1)           # store variance of spatial random effect, phi
