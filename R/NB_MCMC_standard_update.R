@@ -28,6 +28,17 @@ VS_Standard <- function(K, y, NeighborhoodList, which.prior,niter, verbose, pop_
     neighbor_count <- rowSums(A)  # M (diagonal matrix) neighbor count for each spatial unit (notation from Mutiso, Neelon 2022)
     D <- diag(neighbor_count)  # Create diagonal matrix... Degree Matrix
     Q <- D - A     # CAR precisson matrix
+
+    #spatial storage objs
+    Sphi.sq <- matrix(0,lastit,1)           # store variance of spatial random effect, phi
+    phi.mat <- matrix(0,lastit,nspace)     # store spatial random effect
+
+    #spatial parameter inits
+    phi_init <- c(spam::rmvnorm(1, sigma=diag(.01, nspace)))	          # Random effects
+    phi <- phi_init-mean(phi_init) # centered phi
+    s2phi <- var(phi)              # var phi
+    sphi <- sqrt(s2phi)            # std phi
+    tauphi <- 1/s2phi              # precision of phi
   }
 
   # MCMC features
@@ -41,8 +52,7 @@ VS_Standard <- function(K, y, NeighborhoodList, which.prior,niter, verbose, pop_
   Lambda <- matrix(0,lastit,p-1)            # store local shrinkage parameters
   Tau2 <- matrix(0,lastit,1)                # store global shrinkage parameter
   R <- matrix(0,lastit,1)                 # store over-dispersion parameter
-  Sphi.sq <- matrix(0,lastit,1)           # store variance of spatial random effect, phi
-  phi.mat <- matrix(0,lastit,nspace)     # store spatial random effect
+
 
   # Initialize
   beta <- rep(0, p)
@@ -70,12 +80,6 @@ VS_Standard <- function(K, y, NeighborhoodList, which.prior,niter, verbose, pop_
   V <- 5                    # slab variance
   psi.Q <- V*(psi.nu - 1)
 
-  #spatial parameter inits
-  phi_init <- c(spam::rmvnorm(1, sigma=diag(.01, nspace)))	          # Random effects
-  phi <- phi_init-mean(phi_init) # centered phi
-  s2phi <- var(phi)              # var phi
-  sphi <- sqrt(s2phi)            # std phi
-  tauphi <- 1/s2phi              # precision of phi
 
   l <- rep(0, N)      # latent vector for CRT-based update of r
   a <- b <- 0.01      # Gamma hyperparms for r for CRT

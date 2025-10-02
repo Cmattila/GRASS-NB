@@ -44,7 +44,19 @@ VS_Group <- function(K, y, group_ind, NeighborhoodList, which.prior, niter, verb
     A <- spdep::nb2mat(neighbor, style = "B")
     neighbor_count <- rowSums(A)  # M (diagonal matrix) neighbor count for each spatial unit (notation from Mutiso, Neelon 2022)
     D <- diag(neighbor_count)  # Create diagonal matrix... Degree Matrix
-    Q <- D - A     # CAR precisson matrix
+    Q <- D - A     # CAR precision matrix
+
+    #spatial storage obj
+    Sphi.sq <- matrix(0,lastit,1)           # store variance of spatial random effect, phi
+    phi.mat <- matrix(0,lastit,nspace)     # store spatial random effect
+
+    #spatial parameter inits
+    phi_init <- c(spam::rmvnorm(1, sigma=diag(.01, nspace)))	          # Random effects
+    phi <- phi_init-mean(phi_init) # centered phi
+    s2phi <- var(phi)              # var phi
+    sphi <- sqrt(s2phi)            # std phi
+    tauphi <- 1/s2phi              # precision of phi
+
   }
 
   # Storage objects
@@ -54,8 +66,7 @@ VS_Group <- function(K, y, group_ind, NeighborhoodList, which.prior, niter, verb
   Tau2 <- matrix(0,lastit,G)              # store global-local shrinkage parameter
   Zeta2<-matrix(0,lastit,1)               # store global-global shrinkage parameters
   R <- matrix(0,lastit,1)                 # store over-dispersion parameter
-  Sphi.sq <- matrix(0,lastit,1)           # store variance of spatial random effect, phi
-  phi.mat <- matrix(0,lastit,nspace)     # store spatial random effect
+
 
   # Initialize
   beta <- rep(0, p)
@@ -94,12 +105,6 @@ VS_Group <- function(K, y, group_ind, NeighborhoodList, which.prior, niter, verb
   zeta2 <- 1
   xi <- 1
 
-  #spatial parameter inits
-  phi_init <- c(spam::rmvnorm(1, sigma=diag(.01, nspace)))	          # Random effects
-  phi <- phi_init-mean(phi_init) # centered phi
-  s2phi <- var(phi)              # var phi
-  sphi <- sqrt(s2phi)            # std phi
-  tauphi <- 1/s2phi              # precision of phi
 
   l <- rep(0, N)      # latent vector for CRT-based update of r
   a <- b <- 0.01      # Gamma hyperparms for r for CRT
