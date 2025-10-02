@@ -77,7 +77,7 @@ VS_Group <- function(K, y, group_ind, NeighborhoodList, which.prior, niter, verb
   lambda2 <- 5
   del1<-1
   del2<-1                  # lambda hyper parameters
-  nugget<-0.05
+  nugget<-0.1
   T0<-0.1                 # prior on features
   s<-0.01
   epsilon<-1
@@ -285,7 +285,7 @@ VS_Group <- function(K, y, group_ind, NeighborhoodList, which.prior, niter, verb
       # just a transformed version of K, to be specific, a few columns of K for which beta_j's are non-zero
 
       k_sel <- ncol(Xsel)
-      Sigma_inv <- invA0 + t(Xsel)%*%Xsel                            # posterior precision matrix
+      Sigma_inv <- invA0 + t(Xsel)%*%Xsel + diag(nugget, k_sel, k_sel)                          # posterior precision matrix
       sim_beta <- spam::rmvnorm.canonical(1, (t(Xsel)%*%(yc)),       # simulated beta_j's (for only non-zero delta_j's)
                                           as.matrix(Sigma_inv))
       beta[index] <- sim_beta                                        # store the non-zero betas at appropriate indices

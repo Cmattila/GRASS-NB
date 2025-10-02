@@ -29,7 +29,8 @@ local_credible <-function(Beta, local.p.ths = 0.9){
 #' @param lwd Line width for the trace.
 #' @param cex_leg Legend text size.
 #' @param ylim Optional y-limits; if NULL, set to +-1.2*max(|x|) with a fallback.
-#'
+#' @param Diagnostic Logical; if FALSE, disables printing of geweke p-value and effective sample size (ESS) in legend.
+#' #'
 #' @return Invisibly, a list with \code{mean}, \code{geweke_p}, \code{ess}, \code{n}, \code{ylim}.
 #'
 #'@examples
@@ -54,26 +55,14 @@ MCMC_plot <- function(
     col_mean  = "green",
     lwd = 1,
     cex_leg = 0.9,
-    ylim = NULL
+    ylim = NULL,
+    Diagnostic = FALSE
 ){
   # --- sanitize vector ---
   x_vec <- as.numeric(x)
   x_vec <- x_vec[is.finite(x_vec)]
   n <- length(x_vec)
   if (n == 0L) stop("x must contain at least one finite numeric value.")
-
-  # --- diagnostics (convert vector -> coda::mcmc) ---
-  x_mcmc <- coda::as.mcmc(matrix(x_vec, ncol = 1L))
-  # Geweke z -> two-sided p
-  gw <- try(coda::geweke.diag(x_mcmc), silent = TRUE)
-  geweke_p <- if (inherits(gw, "try-error") || is.null(gw$z)) {
-    NA_real_
-  } else {
-    2 * (1 - stats::pnorm(abs(as.numeric(gw$z))))
-  }
-  # ESS
-  ess <- try(as.numeric(coda::effectiveSize(x_mcmc)), silent = TRUE)
-  if (inherits(ess, "try-error") || length(ess) == 0L) ess <- NA_real_
 
   # --- y-limits ---
   if (is.null(ylim)) {
@@ -88,6 +77,22 @@ MCMC_plot <- function(
        ylim = ylim)
   graphics::abline(h = mean(x_vec), col = col_mean, lwd = 2)
 
+  geweke_p = 0
+  ess = 0
+  if(Diagnostic){
+    # --- diagnostics (convert vector -> coda::mcmc) ---
+    x_mcmc <- coda::as.mcmc(matrix(x_vec, ncol = 1L))
+    # Geweke z -> two-sided p
+    gw <- try(coda::geweke.diag(x_mcmc), silent = TRUE)
+    geweke_p <- if (inherits(gw, "try-error") || is.null(gw$z)) {
+      NA_real_
+    } else {
+      2 * (1 - stats::pnorm(abs(as.numeric(gw$z))))
+    }
+    # ESS
+    ess <- try(as.numeric(coda::effectiveSize(x_mcmc)), silent = TRUE)
+    if (inherits(ess, "try-error") || length(ess) == 0L) ess <- NA_real_
+
   # --- legend ---
   leg_txt <- c(
     sprintf("Geweke p = %s",
@@ -96,7 +101,7 @@ MCMC_plot <- function(
             ifelse(is.finite(ess), format(round(ess, 0), scientific = FALSE), "NA"))
   )
   graphics::legend(legend_pos, legend = leg_txt, bty = "n", cex = cex_leg)
-
+  }
   invisible(list(
     mean = mean(x_vec),
     geweke_p = geweke_p,

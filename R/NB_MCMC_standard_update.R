@@ -61,7 +61,7 @@ VS_Standard <- function(K, y, NeighborhoodList, which.prior,niter, verbose, pop_
   tau2 = 0.1
   del1 <- 1
   del2 <- 1                  # lambda hyper parameters
-  nugget <- 0.05              # small diagonal element to be added to the covariance
+  nugget <- 0.1              # small diagonal element to be added to the covariance
   T0 <- 0.1                # prior on features
   s <- 0.01
   epsilon<-1
@@ -229,7 +229,8 @@ VS_Standard <- function(K, y, NeighborhoodList, which.prior,niter, verbose, pop_
       yc <- sqrt(w)*z                                    # adjusting z by Polya weights w, recall that we had the term: (z - K beta)^T diag(w) (z - K beta) inside the exponent,
       # these weight adjustments simplifies it as  (yc - Xsel beta)^T  (yc - Xsel beta), getting rid of the diag(w), note that Xsel is
       # just a transformed version of K, to be specific, a few columns of K for which beta_j's are non-zero
-      Sigma_inv <- invA0 + t(Xsel)%*%Xsel                            # posterior precision matrix
+      k_sel <- ncol(Xsel)
+      Sigma_inv <- invA0 + t(Xsel)%*%Xsel+ diag(nugget, k_sel, k_sel)                             # posterior precision matrix
       sim_beta <- spam::rmvnorm.canonical(1, (t(Xsel)%*%(yc)),       # simulated beta_j's (for only non-zero delta_j's)
                                           as.matrix(Sigma_inv))
       beta[index] <- sim_beta                                        # store the non-zero betas at appropriate indices
@@ -402,8 +403,8 @@ VS_Standard <- function(K, y, NeighborhoodList, which.prior,niter, verbose, pop_
       yc <- sqrt(w)*z                                    # adjusting z by Polya weights w, recall that we had the term: (z - K beta)^T diag(w) (z - K beta) inside the exponent,
       # these weight adjustments simplifies it as  (yc - Xsel beta)^T  (yc - Xsel beta), getting rid of the diag(w), note that Xsel is
       # just a transformed version of K, to be specific, a few columns of K for which beta_j's are non-zero
-
-      Sigma_inv <- invA0 + t(Xsel)%*%Xsel                            # posterior precision matrix
+      k_sel <- ncol(Xsel)
+      Sigma_inv <- invA0 + t(Xsel)%*%Xsel+ diag(nugget, k_sel, k_sel)                             # posterior precision matrix
       sim_beta <- spam::rmvnorm.canonical(1, (t(Xsel)%*%(yc)),       # simulated beta_j's (for only non-zero delta_j's)
                                           as.matrix(Sigma_inv))
       beta[index] <- sim_beta                                        # store the non-zero betas at appropriate indices

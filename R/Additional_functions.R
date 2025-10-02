@@ -13,54 +13,87 @@ ar1_cor <- function(n, rho) {
 }
 
 
-#' @title Generate indices of non-null coefficients under grouped structures
-#' @description
-#' Selects positions (in \code{2:p}) to be non-zero according to a grouped scheme.
-#' In \code{Case1}, picks a combination of whole groups whose sizes sum exactly to
-#' \code{num_nonnull}. In \code{Case2}, spreads \code{num_nonnull} across randomly
-#' chosen groups with \code{per_group_nonnull} per group (plus any remainder).
+#' @title Generate indices of non-null predictors under grouped structures
 #'
-#' @param p Total number of coefficients including intercept at index 1.
-#' @param group_ind Integer vector of length \code{p - 1} giving group id (1..G) for each predictor.
-#' @param num_nonnull Total number of non-null coefficients to allocate.
-#' @param nonnull_group_structure One of \code{c("Case1","Case2")}. See details.
-#' @param per_group_nonnull Target number of non-nulls per group in \code{Case2}.
+#' @description This function selects indices of non-null predictors based on group membership.
+#' Two group structures are supported:
+#' \describe{
+#'   \item{\code{"Case1"}}{Selects \strong{two entire groups at random} whose sizes sum exactly to \code{num_nonnull}.
+#'   All variables from those two groups are marked as non-null.}
+#'   \item{\code{"Case2"}}{Distributes \code{num_nonnull} non-nulls across randomly chosen groups,
+#'   assigning approximately \code{per_group_nonnull} non-nulls per group (with remainder distributed randomly).}
+#' }
 #'
-#' @importFrom utils combn
-#' @return Integer vector of sorted non-null indices in \code{2:p}.
+#' @param p Integer. Total number of predictors including the intercept.
+#'   Since the intercept is excluded, there are \code{p - 1} variables available for selection.
+#' @param group_ind Integer or factor vector of length \code{p - 1}.
+#'   Group membership indicator for each predictor (excluding the intercept).
+#' @param num_nonnull Integer. Total number of predictors to set as non-null.
+#' @param nonnull_group_structure Character string, either \code{"Case1"} or \code{"Case2"}.
+#'   Controls how non-null variables are selected across groups.
+#' @param per_group_nonnull Integer. (Case2 only) Number of non-nulls to allocate per group on average.
+#'
+#' @return An integer vector of indices (1-based, matching \code{beta_true} indexing) of selected non-null predictors.
+#'
+#' @examples
+#' set.seed(123)
+#' p <- 11
+#' group_ind <- rep(1:5, each = 2)  # 10 predictors, 5 groups of size 2
+#'
+#' # Case1: choose two entire groups summing to num_nonnull
+#' generate_nonnull_indices(p, group_ind, num_nonnull = 4, nonnull_group_structure = "Case1")
+#'
+#' # Case2: assign ~2 per group
+#' generate_nonnull_indices(p, group_ind, num_nonnull = 6, nonnull_group_structure = "Case2", per_group_nonnull = 2)
+#'
 #' @export
-generate_nonnull_indices <- function(p, group_ind, num_nonnull,
-                                     nonnull_group_structure = c("Case1", "Case2"),
-                                     per_group_nonnull = 3) {
+
+
+generate_nonnull_indices <- function(
+    p, group_ind, num_nonnull,
+    nonnull_group_structure = c("Case1", "Case2"),
+    per_group_nonnull = 3
+){
   nonnull_group_structure <- match.arg(nonnull_group_structure)
 
   if ((p - 1) < num_nonnull) stop("num_nonnull must be <= p - 1")
   if (length(group_ind) != (p - 1)) stop("group_ind must be of length p - 1")
 
-  G <- length(unique(group_ind))
-  Mg <- table(group_ind)
-  group_indices <- split(1:(p - 1), group_ind)
-  sample_nonNULL <- c()
+  #  group ids as character keys
+  group_ids_chr <- as.character(sort(unique(group_ind)))
+  G  <- length(group_ids_chr)
+  Mg <- table(as.character(group_ind))              # named by group id
+  group_indices <- split(1:(p - 1), as.character(group_ind))
+
+  sample_nonNULL <- integer(0)
 
   if (nonnull_group_structure == "Case1") {
-    found <- FALSE
-    group_ids <- as.character(sort(unique(group_ind)))
+    if (G < 2) stop("Need at least two groups for Case1.")
 
-    for (k in 1:length(group_ids)) {
-      group_combos <- utils::combn(group_ids, k, simplify = FALSE)
-      for (grp_set in group_combos) {
-        total_size <- sum(Mg[grp_set])
-        if (total_size == num_nonnull) {
-          sample_nonNULL <- unlist(group_indices[grp_set])
-          found <- TRUE
-          break
-        }
-      }
-      if (found) break
+    # all unordered pairs of groups
+    all_pairs <- utils::combn(group_ids_chr, 2, simplify = FALSE)
+
+    # keep pairs whose total size equals num_nonnull
+    matching_pairs <- Filter(function(pr) sum(Mg[pr]) == num_nonnull, all_pairs)
+
+    if (!length(matching_pairs)) {
+      # diagnostics
+      pair_totals <- vapply(all_pairs, function(pr) sum(Mg[pr]), numeric(1))
+      stop(
+        paste0(
+          "No pair of full groups sums to num_nonnull = ", num_nonnull, ". ",
+          "Available pair totals: ", paste(sort(unique(pair_totals)), collapse = ", "), "."
+        )
+      )
     }
 
-    if (!found) {
-      stop("No combination of groups adds up exactly to num_nonnull.")
+    # randomly choose one pair and take ALL indices from those two groups
+    chosen_pair <- matching_pairs[[sample.int(length(matching_pairs), 1)]]
+    sample_nonNULL <- unlist(group_indices[chosen_pair], use.names = FALSE)
+
+    # sanity check
+    if (length(sample_nonNULL) != num_nonnull) {
+      stop("Internal error: selected pair does not match num_nonnull after selection.")
     }
 
   } else if (nonnull_group_structure == "Case2") {
@@ -69,23 +102,23 @@ generate_nonnull_indices <- function(p, group_ind, num_nonnull,
 
     if (num_groups_needed > G) stop("Not enough groups to allocate nonzero betas.")
 
-    selected_groups <- sample(1:G, num_groups_needed)
-    extra_groups <- if (remainder > 0) sample(selected_groups, remainder) else integer(0)
+    # sample by group ids
+    selected_groups <- sample(group_ids_chr, num_groups_needed)
+    extra_groups <- if (remainder > 0) sample(selected_groups, remainder) else character(0)
 
-    for (g in selected_groups) {
-      group_vars <- group_indices[[as.character(g)]]
-
-      k <- per_group_nonnull + as.integer(g %in% extra_groups)  # add extra if this group is selected for remainder
+    for (gid in selected_groups) {
+      group_vars <- group_indices[[gid]]
+      k <- per_group_nonnull + as.integer(gid %in% extra_groups)
 
       if (length(group_vars) < k) {
-        stop(paste("Group", g, "does not have enough variables for", k, "nonzeros."))
+        stop(paste("Group", gid, "does not have enough variables for", k, "nonzeros."))
       }
-
       sample_nonNULL <- c(sample_nonNULL, sample(group_vars, k))
     }
   }
 
-  nonnull_locs <- sort(sample_nonNULL + 1)  # shift to match beta_true
+  # shift by +1 to match beta_true indexing convention
+  nonnull_locs <- sort(sample_nonNULL + 1)
   return(nonnull_locs)
 }
 

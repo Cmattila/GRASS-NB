@@ -76,7 +76,7 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
   lambda2 <- 5
   del1<-1
   del2<-1                  # lambda hyper parameters
-  nugget<-0.05
+  nugget<-0.1              # small diagonal element to be added to the covariance
   T0<-0.1                 # prior on features
   s<-0.01
   epsilon<-1
@@ -284,7 +284,7 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
       # just a transformed version of K, to be specific, a few columns of K for which beta_j's are non-zero
 
       k_sel <- ncol(Xsel)
-      Sigma_inv <- invA0 + t(Xsel)%*%Xsel                            # posterior precision matrix
+      Sigma_inv <- invA0 + t(Xsel)%*%Xsel + diag(nugget, k_sel, k_sel)                             # posterior precision matrix
       sim_beta <- spam::rmvnorm.canonical(1, (t(Xsel)%*%(yc)),       # simulated beta_j's (for only non-zero delta_j's)
                                           as.matrix(Sigma_inv))
       beta[index] <- sim_beta                                        # store the non-zero betas at appropriate indices
@@ -386,7 +386,7 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
       #============================================================================#
       # based on priors, first coefficient i.e., intercept is ignored from penalization
       K_w <- sqrt(w)*K
-      Sigma_inv <- diag(c(T0, 1/Lambda2/rep(tau2, times = Mg)/zeta2)) + crossprod(K_w) + diag(nugget, p)   # notice the rep command
+      Sigma_inv <- diag(c(T0, 1/Lambda2/rep(tau2, times = Mg)/zeta2)) + crossprod(K_w) + diag(nugget, p)
       M <- t(K_w)%*%(sqrt(w)*z)
       beta <- c(spam::rmvnorm.canonical(1, M, as.matrix(Sigma_inv)))
       beta_cov <- beta[-1]
