@@ -46,10 +46,6 @@ VS_Group <- function(K, y, group_ind, NeighborhoodList, which.prior, niter, verb
     D <- diag(neighbor_count)  # Create diagonal matrix... Degree Matrix
     Q <- D - A     # CAR precision matrix
 
-    #spatial storage obj
-    Sphi.sq <- matrix(0,lastit,1)           # store variance of spatial random effect, phi
-    phi.mat <- matrix(0,lastit,nspace)     # store spatial random effect
-
     #spatial parameter inits
     phi_init <- c(spam::rmvnorm(1, sigma=diag(.01, nspace)))	          # Random effects
     phi <- phi_init-mean(phi_init) # centered phi
@@ -66,7 +62,8 @@ VS_Group <- function(K, y, group_ind, NeighborhoodList, which.prior, niter, verb
   Tau2 <- matrix(0,lastit,G)              # store global-local shrinkage parameter
   Zeta2<-matrix(0,lastit,1)               # store global-global shrinkage parameters
   R <- matrix(0,lastit,1)                 # store over-dispersion parameter
-
+  Sphi.sq <- matrix(0,lastit,1)           # store variance of spatial random effect, phi
+  phi.mat <- matrix(0,lastit,length(y))     # store spatial random effect
 
   # Initialize
   beta <- rep(0, p)

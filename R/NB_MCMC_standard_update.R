@@ -27,11 +27,8 @@ VS_Standard <- function(K, y, NeighborhoodList, which.prior,niter, verbose, pop_
     A <- spdep::nb2mat(neighbor, style = "B")
     neighbor_count <- rowSums(A)  # M (diagonal matrix) neighbor count for each spatial unit (notation from Mutiso, Neelon 2022)
     D <- diag(neighbor_count)  # Create diagonal matrix... Degree Matrix
-    Q <- D - A     # CAR precisson matrix
+    Q <- D - A     # CAR precision matrix
 
-    #spatial storage objs
-    Sphi.sq <- matrix(0,lastit,1)           # store variance of spatial random effect, phi
-    phi.mat <- matrix(0,lastit,nspace)     # store spatial random effect
 
     #spatial parameter inits
     phi_init <- c(spam::rmvnorm(1, sigma=diag(.01, nspace)))	          # Random effects
@@ -52,6 +49,8 @@ VS_Standard <- function(K, y, NeighborhoodList, which.prior,niter, verbose, pop_
   Lambda <- matrix(0,lastit,p-1)            # store local shrinkage parameters
   Tau2 <- matrix(0,lastit,1)                # store global shrinkage parameter
   R <- matrix(0,lastit,1)                 # store over-dispersion parameter
+  Sphi.sq <- matrix(0,lastit,1)           # store variance of spatial random effect, phi
+  phi.mat <- matrix(0,lastit,length(y))     # store spatial random effect
 
 
   # Initialize
