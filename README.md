@@ -22,12 +22,9 @@ and Souvik Seal
 
 <!--   <!-- invisible spacer: keeps layout, not visible -->
 
-–\>
-<td style="text-align:right; padding-left:400px;">
-
-<img src="MUSC_logo_simple.png" width="140" height="150"/>
-</td>
-
+–\> <!--   <td style="text-align:right; padding-left:400px;"> -->
+<!--   <img src="MUSC_logo_simple.png" width="140" height="150"/> -->
+<!-- </td> -->
 </tr>
 
 </table>
@@ -35,7 +32,7 @@ and Souvik Seal
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
 The *R* package implements the models proposed in the manuscript “MUSC:
-MUlti-level variable selection for Spatial Count data.” It enables
+MUlti-level variable selection for Spatially Count data.” It enables
 Bayesian variable selection for regression of negative binomial
 (overdispersed) spatially indexed count data with and without feature
 grouping using horseshoe, spike and slab, or when grouping the
@@ -80,10 +77,10 @@ under Case 2 where within a group some features are active and some are
 inactive, have three, three and four active features.
 
 ``` r
-set.seed(2025)
+set.seed(2025*2025)
 N <- 100 # number of observations/ spatial units
-p_dim <- 50 # number of features
-signal_vec <- runif(10, min = 0.5, max = 2)
+p_dim <- 50 # number of features (including features)
+signal_vec <- rep(2, 10)
 
 Mg = 5 # group size
 G = p_dim/Mg # number of groups
@@ -91,14 +88,14 @@ group_ind <- generate_group_ind(p_dim, G) # group indicator
 # Warning in generate_group_ind(p_dim, G): p - 1 is not divisible by G. Groups
 # will be uneven.
 
-#generating the 
-nonNull_indices_p50_Case2 <- generate_nonnull_indices(p_dim, group_ind, num_nonnull = 10,
-                                                        nonnull_group_structure = "Case2", per_group_nonnull = 3)
+#generating the features where nonnulls are under Case 1 where 2 fulls groups are active
+nonNull_indices_p50_Case1 <- generate_nonnull_indices(p_dim, group_ind, num_nonnull = 10,
+                                                        nonnull_group_structure = "Case1")
 
-Null_indices_p50_Case2 <- setdiff(1:50, nonNull_indices_p50_Case2)  # Complement of nonNull indices
+Null_indices_p50_Case1 <- setdiff(1:50, nonNull_indices_p50_Case1)  # Complement of nonNull indices
 
 Features <- feature_sim_grouped(N = N, p = p_dim, group_ind = group_ind, 
-                            nonNull_indices = nonNull_indices_p50_Case2, signal_vec = signal_vec)
+                            nonNull_indices = nonNull_indices_p50_Case1, signal_vec = signal_vec)
 ```
 
 ## Construct the random effect $\phi$ and neighborhood list
@@ -109,7 +106,7 @@ with which $\mathbf{y}$ will be generated and the associated
 neighborhood list.
 
 ``` r
-set.seed(2025)
+set.seed(2025*2025)
 
 # Create a 10x10 grid of coordinates since we have an N=100 and assuming no repeated measures
 coords100 <- expand.grid(x = 1:10, y = 1:10)
@@ -129,7 +126,7 @@ Q100 <- diag(rowSums(n_mat100)) - n_mat100    #iCAR precision
 
 ## Simulating phi, iCAR spatial random effects
 phi <- MUSC::phi_True_func(nu_vals=0.1, Q=Q100, n_space=100)
-# nu = 0.1 phi range = -4.228904 4.979688 actual SD = 1.936519
+# nu = 0.1 phi range = -3.727779 4.306155 actual SD = 1.579542
 
 # plotting phi
 df <- data.frame(x = coords100$x,
@@ -154,12 +151,12 @@ Then we simulate $N=100$ outcomes with spatial index phi, simulated
 populations for each spatial unit, and a scale of per 100,000.
 
 ``` r
-set.seed(2025)
+set.seed(2025*2025)
 
 scale = 100000
 pop <- sample(10000:50000, N, TRUE)
  
-yy <- y_gen_fun(N = N, r = 1, K = Features$K, beta_true = Features$beta_true, phi_true = phi$phi_nu_0.1, Scale = scale, pop_col = pop, offset = TRUE)
+yy <- MUSC::y_gen_fun(N = N, r = 1, K = Features$K, beta_true = Features$beta_true, phi_true = phi$phi_nu_0.1, Scale = scale, pop_col = pop, offset = TRUE)
 ```
 
 ## Fit the SS and HS grouped varible selection models
@@ -176,9 +173,9 @@ is the vector of the population for each spatial unit and *scale* is the
 desired scale for the rates (i.e. per 100,000).
 
 ``` r
-set.seed(2025)
+set.seed(2025*2025)
 
-SS_group_offset_space <- MUSC(X = Features$X,                 # feature matrix
+SS_group_offset_space <- MUSC::MUSC(X = scale(Features$X),                 # feature matrix
                               y = yy$y,                        # outcome vector
                               group_ind =  group_ind,         # group indicator vector
                               NeighborhoodList = nb100,       # Neighborhood list
@@ -186,7 +183,7 @@ SS_group_offset_space <- MUSC(X = Features$X,                 # feature matrix
                               scale = scale,                  # rate scale
                               which.prior = "SS",             # method
                               niter = 10000,                  # MCMC iterations; use more in practice, brief here for speed
-                              verbose = FALSE)                # not printing MCMC iteration progress  
+                              verbose = FALSE)                # not printing MCMC iteration progress
 # [1] "500 / 10000"
 # [1] "1000 / 10000"
 # [1] "1500 / 10000"
@@ -210,19 +207,19 @@ SS_group_offset_space <- MUSC(X = Features$X,                 # feature matrix
 
 print(str(SS_group_offset_space)) # check the returned list object
 # List of 9
-#  $ Beta  : num [1:5000, 1:50] 4.52 4.78 3.76 3.44 3.58 ...
-#  $ r     : num [1:5000, 1] 0.1205 0.0872 0.0778 0.0886 0.0862 ...
+#  $ Beta  : num [1:5000, 1:50] 1.63 1.74 1.69 1.55 1.64 ...
+#  $ r     : num [1:5000, 1] 0.301 0.259 0.286 0.36 0.284 ...
 #  $ Delta : num [1:5000, 1:50] 1 1 1 1 1 1 1 1 1 1 ...
 #  $ pDelta: num [1:5000, 1:50] 1 1 1 1 1 1 1 1 1 1 ...
-#  $ phi   : num [1:5000, 1:100] 3.419 0.277 1.424 1.284 -1.759 ...
-#  $ sphiSq: num [1:5000, 1] 5.31 6.38 6.69 6.92 7.56 ...
-#  $ Zeta2 : num [1:5000, 1] 1.37 2.19 3.55 2.09 2.12 ...
-#  $ Tau2  : num [1:5000, 1:10] 13.134 24.601 13.143 0.435 1.486 ...
+#  $ phi   : num [1:5000, 1:100] 0.01844 0.19825 1.04582 0.07089 -0.00758 ...
+#  $ sphiSq: num [1:5000, 1] 0.3 0.322 0.309 0.269 0.278 ...
+#  $ Zeta2 : num [1:5000, 1] 0.349 0.403 0.421 0.298 0.252 ...
+#  $ Tau2  : num [1:5000, 1:10] 0.1008 0.4203 0.5589 0.6684 0.0776 ...
 #  $ Lambda: num [1:5000, 1:49] 0 0 0 0 0 0 0 0 0 0 ...
 # NULL
 
 
-HS_group_offset_space <- MUSC(X = Features$X,                 # feature matrix
+HS_group_offset_space <- MUSC::MUSC(X = scale(Features$X),                 # feature matrix
                               y = yy$y,                       # outcome vector
                               group_ind =  group_ind,         # group indicator vector
                               NeighborhoodList = nb100,       # Neighborhood list
@@ -230,7 +227,7 @@ HS_group_offset_space <- MUSC(X = Features$X,                 # feature matrix
                               scale = scale,                  # rate scale
                               which.prior = "HS",             # method
                               niter = 10000,                  # MCMC iterations; use more in practice, brief here for speed
-                              verbose = FALSE)                # not printing MCMC iteration progress   
+                              verbose = FALSE)                # not printing MCMC iteration progress
 # [1] "500 / 10000"
 # [1] "1000 / 10000"
 # [1] "1500 / 10000"
@@ -254,15 +251,15 @@ HS_group_offset_space <- MUSC(X = Features$X,                 # feature matrix
 
 print(str(HS_group_offset_space)) # check the returned list object
 # List of 9
-#  $ Beta  : num [1:5000, 1:50] 3.01 2.81 3.56 3.51 3.59 ...
-#  $ r     : num [1:5000, 1] 0.162 0.171 0.137 0.108 0.11 ...
+#  $ Beta  : num [1:5000, 1:50] 2.39 2.24 1.89 2.21 1.86 ...
+#  $ r     : num [1:5000, 1] 0.166 0.251 0.237 0.209 0.194 ...
 #  $ Delta : num [1:5000, 1:50] 1 1 1 1 1 1 1 1 1 1 ...
 #  $ pDelta: num [1:5000, 1:50] 1 1 1 1 1 1 1 1 1 1 ...
-#  $ phi   : num [1:5000, 1:100] 0.496 0.401 -1 -0.274 -0.766 ...
-#  $ sphiSq: num [1:5000, 1] 0.933 0.889 0.833 0.886 0.784 ...
-#  $ Zeta2 : num [1:5000, 1] 0.816 0.492 0.517 0.286 0.411 ...
-#  $ Tau2  : num [1:5000, 1:10] 0.233 1.031 1.125 3.965 3.165 ...
-#  $ Lambda: num [1:5000, 1:49] 0.291 0.0546 1.443 0.039 0.0281 ...
+#  $ phi   : num [1:5000, 1:100] -0.1 -0.274 0.24 -0.177 -0.421 ...
+#  $ sphiSq: num [1:5000, 1] 0.106 0.118 0.133 0.198 0.19 ...
+#  $ Zeta2 : num [1:5000, 1] 0.00966 0.00855 0.00928 0.00954 0.00915 ...
+#  $ Tau2  : num [1:5000, 1:10] 0.828 0.3 0.287 0.22 0.211 ...
+#  $ Lambda: num [1:5000, 1:49] 8.37 26.77 4.1 3.85 1.31 ...
 # NULL
 ```
 
@@ -270,18 +267,25 @@ print(str(HS_group_offset_space)) # check the returned list object
 
 The above function returns a list of several objects, including a matrix
 of the post-burn-in posterior beta estimates, with dimension *niter*
-$\times p$. We randomly select 4 betas and plot their convergence.
+$\times p$. We randomly select four betas and plot their convergence.
 
 ``` r
 set.seed(2025)
 
-ran_sam = sample(1:p_dim, 4)
-#HS trace plots
-par(mfrow = c(2, 2))
-MCMC_plot(HS_group_offset_space$Beta[, (ran_sam[1])], main = "HS - beta 13")
-MCMC_plot(HS_group_offset_space$Beta[, (ran_sam[2])], main = "HS - beta 12")
-MCMC_plot(HS_group_offset_space$Beta[, (ran_sam[3])], main = "HS - beta 36")
-MCMC_plot(HS_group_offset_space$Beta[, (ran_sam[4])], main = "HS - beta 26")
+ran_sam <- sample(2:p_dim, 4)
+
+titles <- c(
+  paste0("HS - Beta ", ran_sam)
+)
+
+# Plot
+par(mfrow = c(2, 2), mar = c(3, 4, 2, 1), oma = c(0, 0, 2, 0))
+for (i in seq_along(ran_sam)) {
+  MUSC::MCMC_plot(
+    HS_group_offset_space$Beta[, ran_sam[i]],
+    main = titles[i]
+  )
+}
 ```
 
 <img src="README_files/figure-gfm/MCMC-diagnostic-plots-1.png" width="100%" />
@@ -291,20 +295,20 @@ MCMC_plot(HS_group_offset_space$Beta[, (ran_sam[4])], main = "HS - beta 26")
 Display the posterior inclusion probability (PIP) of each beta with a
 selection threshold of $0.75$ for the SS based model. Within the plot,
 along the x-axis are the names of the features and above are their
-respective groups and the truly non-null features are highlighted.
+respective groups. Truly non-null features are shown in a deeper color.
 
 ``` r
 post_means <- colMeans(SS_group_offset_space$pDelta)
 selected <- as.numeric(post_means > 0.75)
-tp <- sum(selected[nonNull_indices_p50_Case2]) # truly nonnulls detected 
-fn <- length(nonNull_indices_p50_Case2) - tp   # truly nonnulls not detected
-fp <- sum(selected[Null_indices_p50_Case2])    # truly null detected; nulls include intercept
-tn <- length(Null_indices_p50_Case2) - fp      # truly null not detected; nulls include intercept
+tp <- sum(selected[nonNull_indices_p50_Case1]) # truly nonnulls detected 
+fn <- length(nonNull_indices_p50_Case1) - tp   # truly nonnulls not detected
+fp <- sum(selected[Null_indices_p50_Case1])    # truly null detected; nulls include intercept
+tn <- length(Null_indices_p50_Case1) - fp      # truly null not detected; nulls include intercept
 
 
 
 # predictors correspond to columns 2:p (since col 1 is the intercept)
-predictors <- paste0("x", 1:(p_dim - 1))              # keys for plotting
+predictors <- paste0( 1:(p_dim - 1))              # keys for plotting
 predictor_labels <- predictors                     # or swap in pretty labels if you have them
 
 # Group labels: map each predictor to its group id (1..G)
@@ -332,7 +336,7 @@ group_levels <- paste0( sort(unique(group_ind)))  # order under x-axis
 
 
 #plotting with truly nonnulls in a darker shade
-res_highlight<- plot_pdelta_bars_mcmc_highlights(
+res_highlight<- MUSC::plot_pdelta_bars_mcmc_highlights(
   predictors        = predictors,
   pdelta_mat        = SS_group_offset_space$pDelta[,-1],      # iterations × (p-1) matrix, removing the intercept column 
   outcome_name      = "SS (group, spatial, offset)",    # whatever label you want in the legend
@@ -345,7 +349,7 @@ res_highlight<- plot_pdelta_bars_mcmc_highlights(
   legend_title      = "Model/Outcome",
   base_size         = 12,
   bracket_text_size = 4,
-  highlight_idx  = nonNull_indices_p50_Case2-1, #shifting indexes by 1 to accomodate predictors 1:p-1
+  highlight_idx  = nonNull_indices_p50_Case1-1, #shifting indexes by 1 to accomodate predictors 1:p-1
   highlight_fill = "#1F77B4"  # highlight color for truly nonnulls
 )
 # Coordinate system already present.
@@ -362,18 +366,18 @@ print(res_highlight$plot)
 
 Display the 95% ETI CrI of each beta for the HS based model. Within the
 plot, along the x-axis are the names of the features and above are their
-respective groups and the truly non-null features are highlighted.
+respective groups. Truly non-null features are shown in a deeper color.
 
 ``` r
-inclusion <- local_credible(HS_group_offset_space$Beta, local.p.ths = 0.95)  # 0/1 vector
-tp <- sum(inclusion[nonNull_indices_p50_Case2]) # truly nonnulls detected 
-fn <- length(nonNull_indices_p50_Case2) - tp   # truly nonnulls not detected
-fp <- sum(inclusion[Null_indices_p50_Case2])    # truly null detected; nulls include intercept
-tn <- length(Null_indices_p50_Case2) - fp      # truly null not detected; nulls include intercept
+inclusion <- MUSC::local_credible(HS_group_offset_space$Beta, local.p.ths = 0.95)  # 0/1 vector
+tp <- sum(inclusion[nonNull_indices_p50_Case1]) # truly nonnulls detected 
+fn <- length(nonNull_indices_p50_Case1) - tp   # truly nonnulls not detected
+fp <- sum(inclusion[Null_indices_p50_Case1])    # truly null detected; nulls include intercept
+tn <- length(Null_indices_p50_Case1) - fp      # truly null not detected; nulls include intercept
 
 
 # predictors correspond to columns 2:p (since col 1 is the intercept)
-predictors <- paste0("x", 1:(p_dim - 1))              # keys for plotting
+predictors <- paste0( 1:(p_dim - 1))              # keys for plotting
 predictor_labels <- predictors                     # or swap in pretty labels if you have them
 
 # Group labels: map each predictor to its group id (1..G)
@@ -405,7 +409,7 @@ group_levels <- paste0( sort(unique(group_ind)))  # order under x-axis
 
 
 #plotting with truly nonnulls in a darker shade
-res_HS_highlight <- plot_cri_highlights(
+res_HS_highlight <- MUSC::plot_cri_highlights(
   outcomes = c("HS"),
   predictors = predictors,
   betas = list(
@@ -415,7 +419,7 @@ res_HS_highlight <- plot_cri_highlights(
   group_map       = group_map,
   group_levels    = group_levels,
   x_order = "group",
-  highlight_idx = (nonNull_indices_p50_Case2-1),
+  highlight_idx = (nonNull_indices_p50_Case1-1),
   verbose         = TRUE,
   base_size       = 12, 
   colors = "darkgreen",
