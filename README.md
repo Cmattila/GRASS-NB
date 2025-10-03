@@ -10,11 +10,11 @@
 MUSC
 </h1>
 
-<p style="margin:0.25rem 0 0;">
+<!-- <p style="margin:0.25rem 0 0;"> -->
 
-<strong>Authors:</strong> Chloe Mattila, Elizabeth Hill, Brian Neelon,
-and Souvik Seal
-</p>
+<!--   <strong>Authors:</strong> Chloe Mattila, Elizabeth Hill, Brian Neelon, and Souvik Seal -->
+
+<!-- </p> -->
 
 </td>
 
@@ -32,15 +32,15 @@ and Souvik Seal
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
 The *R* package implements the models proposed in the manuscript “MUSC:
-MUlti-level variable selection for Spatially Count data.” It enables
-Bayesian variable selection for regression of negative binomial
-(overdispersed) spatially indexed count data with and without feature
-grouping using horseshoe, spike and slab, or when grouping the
-multi-level group extensions of horseshoe or spike and slab priors. It
-is easily applicable to broader spatial datasets, where the outcome is
-spatially indexed count data (e.g. State-level cancer incidence counts)
-with multiple features, and feature grouping (e.g. Population/ SES,
-Behavior, Smoking, etc).
+MUlti-level variable selection for Spatially indexed Count data.” It
+enables Bayesian variable selection for regression of overdispersed
+negative binomial spatially indexed count data, with or without feature
+grouping. MUSC supports both standard priors, horseshoe and
+spike-and-slab, and their multi-level group extensions when feature
+grouping is applied. The package is broadly applicable to spatial
+datasets where the outcome is spatially indexed count data (e.g.,
+state-level cancer incidence counts) and the predictors may be grouped
+into meaningful categories (e.g., population/SES, behavior, smoking).
 
 ## Install and load MUSC
 
