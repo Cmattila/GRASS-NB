@@ -74,7 +74,7 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
   r <- 1
   adjLambda2 <- Lambda2 <- rep(0.1, p-1)
   for (i in 1:(p - 1)) {
-    if (is.singleton[group_id[i]]) {
+    if (is.singleton[group_ind[i]]) {
       Lambda2[i] <- NA
       adjLambda2[i]<- NA
     }
