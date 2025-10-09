@@ -76,8 +76,8 @@ VS_Group <- function(K, y, group_ind, NeighborhoodList, which.prior, niter, verb
   adjLambda2 <- Lambda2 <- rep(0.1, p-1)
   for (i in 1:(p - 1)) {
     if (is.singleton[group_ind[i]]) {
-      Lambda2[i] <- NA
-      adjLambda2[i]<- NA
+      Lambda2[i] <- 1
+      adjLambda2[i]<- 1
     }
   }
 
