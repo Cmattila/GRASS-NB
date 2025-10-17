@@ -320,10 +320,12 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
           summand <- sum(beta_cov[1:Mg[1]]^2)
         }
         summand_vec <- c(summand_vec, summand)
-        tau2[g] <- MCMCpack::rinvgamma(1, (Mstar[g] + 1)/2, scale = 1/epsilon + summand/zeta2/2)
+        if(is.singleton[g]){
+          tau2[g] <- 1
+        }else{ tau2[g] <- MCMCpack::rinvgamma(1, (Mstar[g] + 1)/2, scale = 1/epsilon + summand/zeta2/2)
         tau2[g] <- ifelse(tau2[g] > exp(5), exp(5),
                           ifelse(tau2[g] < exp(-5), exp(-5), tau2[g]))    #thresholding
-        epsilon[g] <- MCMCpack::rinvgamma(1, 1, scale = 1 + 1/tau2[g])
+        epsilon[g] <- MCMCpack::rinvgamma(1, 1, scale = 1 + 1/tau2[g])}
       }
       zeta2 <- MCMCpack::rinvgamma(1, sum(Mstar)/2,
                                    scale = 1/xi + sum(summand_vec/tau2)/2)
@@ -334,7 +336,7 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
 
 
       #============================================================================#
-      ## Algorithm 7th step: update phi (icar prior) ----
+      ## Algorithm 6th step: update phi (icar prior) ----
       #============================================================================#
       priorprec<-1/(sphi^2)*Q                    # Prior precision of phi1
       priormean<- 0
@@ -545,10 +547,12 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
           summand <- sum(beta_cov[1:Mg[1]]^2)
         }
         summand_vec <- c(summand_vec, summand)
-        tau2[g] <- MCMCpack::rinvgamma(1, (Mstar[g] + 1)/2, scale = 1/epsilon + summand/zeta2/2)
+        if(is.singleton[g]){
+          tau2[g] <- 1
+        }else{ tau2[g] <- MCMCpack::rinvgamma(1, (Mstar[g] + 1)/2, scale = 1/epsilon + summand/zeta2/2)
         tau2[g] <- ifelse(tau2[g] > exp(5), exp(5),
                           ifelse(tau2[g] < exp(-5), exp(-5), tau2[g]))    #thresholding
-        epsilon[g] <- MCMCpack::rinvgamma(1, 1, scale = 1 + 1/tau2[g])
+        epsilon[g] <- MCMCpack::rinvgamma(1, 1, scale = 1 + 1/tau2[g])}
       }
       zeta2 <- MCMCpack::rinvgamma(1, sum(Mstar)/2,
                                    scale = 1/xi + sum(summand_vec/tau2)/2)
