@@ -244,7 +244,7 @@ res_highlight<- MUSC::plot_pdelta_bars_mcmc_highlights(
   group_levels      = group_levels,              # order of bands (required if using groups)
   use_groups        = TRUE,
   x_order           = "group",                   # "group" to sort by bands, else "given"
-  thresholds        = c(0.75),               # reference lines
+  thresholds        = c(0.6),               # reference lines
   legend_title      = "Model/Outcome",
   base_size         = 12,
   bracket_text_size = 4,
