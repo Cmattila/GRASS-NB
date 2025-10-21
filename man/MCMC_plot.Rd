@@ -8,11 +8,12 @@ MCMC_plot(
   x,
   main = NULL,
   legend_pos = "topright",
-  col_trace = "green",
-  col_mean = "black",
+  col_trace = "black",
+  col_mean = "green",
   lwd = 1,
   cex_leg = 0.9,
-  ylim = NULL
+  ylim = NULL,
+  Diagnostic = FALSE
 )
 }
 \arguments{
@@ -31,6 +32,9 @@ MCMC_plot(
 \item{cex_leg}{Legend text size.}
 
 \item{ylim}{Optional y-limits; if NULL, set to +-1.2*max(|x|) with a fallback.}
+
+\item{Diagnostic}{Logical; if FALSE, disables printing of geweke p-value and effective sample size (ESS) in legend.
+#'}
 }
 \value{
 Invisibly, a list with \code{mean}, \code{geweke_p}, \code{ess}, \code{n}, \code{ylim}.

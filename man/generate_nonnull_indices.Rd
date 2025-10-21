@@ -2,7 +2,7 @@
 % Please edit documentation in R/Additional_functions.R
 \name{generate_nonnull_indices}
 \alias{generate_nonnull_indices}
-\title{Generate indices of non-null coefficients under grouped structures}
+\title{Generate indices of non-null predictors under grouped structures}
 \usage{
 generate_nonnull_indices(
   p,
@@ -13,22 +13,41 @@ generate_nonnull_indices(
 )
 }
 \arguments{
-\item{p}{Total number of coefficients including intercept at index 1.}
+\item{p}{Integer. Total number of predictors including the intercept.
+Since the intercept is excluded, there are \code{p - 1} variables available for selection.}
 
-\item{group_ind}{Integer vector of length \code{p - 1} giving group id (1..G) for each predictor.}
+\item{group_ind}{Integer or factor vector of length \code{p - 1}.
+Group membership indicator for each predictor (excluding the intercept).}
 
-\item{num_nonnull}{Total number of non-null coefficients to allocate.}
+\item{num_nonnull}{Integer. Total number of predictors to set as non-null.}
 
-\item{nonnull_group_structure}{One of \code{c("Case1","Case2")}. See details.}
+\item{nonnull_group_structure}{Character string, either \code{"Case1"} or \code{"Case2"}.
+Controls how non-null variables are selected across groups.}
 
-\item{per_group_nonnull}{Target number of non-nulls per group in \code{Case2}.}
+\item{per_group_nonnull}{Integer. (Case2 only) Number of non-nulls to allocate per group on average.}
 }
 \value{
-Integer vector of sorted non-null indices in \code{2:p}.
+An integer vector of indices (1-based, matching \code{beta_true} indexing) of selected non-null predictors.
 }
 \description{
-Selects positions (in \code{2:p}) to be non-zero according to a grouped scheme.
-In \code{Case1}, picks a combination of whole groups whose sizes sum exactly to
-\code{num_nonnull}. In \code{Case2}, spreads \code{num_nonnull} across randomly
-chosen groups with \code{per_group_nonnull} per group (plus any remainder).
+This function selects indices of non-null predictors based on group membership.
+Two group structures are supported:
+\describe{
+\item{\code{"Case1"}}{Selects \strong{two entire groups at random} whose sizes sum exactly to \code{num_nonnull}.
+All variables from those two groups are marked as non-null.}
+\item{\code{"Case2"}}{Distributes \code{num_nonnull} non-nulls across randomly chosen groups,
+assigning approximately \code{per_group_nonnull} non-nulls per group (with remainder distributed randomly).}
+}
+}
+\examples{
+set.seed(123)
+p <- 11
+group_ind <- rep(1:5, each = 2)  # 10 predictors, 5 groups of size 2
+
+# Case1: choose two entire groups summing to num_nonnull
+generate_nonnull_indices(p, group_ind, num_nonnull = 4, nonnull_group_structure = "Case1")
+
+# Case2: assign ~2 per group
+generate_nonnull_indices(p, group_ind, num_nonnull = 6, nonnull_group_structure = "Case2", per_group_nonnull = 2)
+
 }

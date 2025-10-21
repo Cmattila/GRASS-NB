@@ -29,7 +29,8 @@ local_credible <-function(Beta, local.p.ths = 0.9){
 #' @param lwd Line width for the trace.
 #' @param cex_leg Legend text size.
 #' @param ylim Optional y-limits; if NULL, set to +-1.2*max(|x|) with a fallback.
-#'
+#' @param Diagnostic Logical; if FALSE, disables printing of geweke p-value and effective sample size (ESS) in legend.
+#' #'
 #' @return Invisibly, a list with \code{mean}, \code{geweke_p}, \code{ess}, \code{n}, \code{ylim}.
 #'
 #'@examples
@@ -50,30 +51,18 @@ MCMC_plot <- function(
     x,
     main = NULL,
     legend_pos = "topright",
-    col_trace = "green",
-    col_mean  = "black",
+    col_trace = "black",
+    col_mean  = "green",
     lwd = 1,
     cex_leg = 0.9,
-    ylim = NULL
+    ylim = NULL,
+    Diagnostic = FALSE
 ){
   # --- sanitize vector ---
   x_vec <- as.numeric(x)
   x_vec <- x_vec[is.finite(x_vec)]
   n <- length(x_vec)
   if (n == 0L) stop("x must contain at least one finite numeric value.")
-
-  # --- diagnostics (convert vector -> coda::mcmc) ---
-  x_mcmc <- coda::as.mcmc(matrix(x_vec, ncol = 1L))
-  # Geweke z -> two-sided p
-  gw <- try(coda::geweke.diag(x_mcmc), silent = TRUE)
-  geweke_p <- if (inherits(gw, "try-error") || is.null(gw$z)) {
-    NA_real_
-  } else {
-    2 * (1 - stats::pnorm(abs(as.numeric(gw$z))))
-  }
-  # ESS
-  ess <- try(as.numeric(coda::effectiveSize(x_mcmc)), silent = TRUE)
-  if (inherits(ess, "try-error") || length(ess) == 0L) ess <- NA_real_
 
   # --- y-limits ---
   if (is.null(ylim)) {
@@ -88,6 +77,22 @@ MCMC_plot <- function(
        ylim = ylim)
   graphics::abline(h = mean(x_vec), col = col_mean, lwd = 2)
 
+  geweke_p = 0
+  ess = 0
+  if(Diagnostic){
+    # --- diagnostics (convert vector -> coda::mcmc) ---
+    x_mcmc <- coda::as.mcmc(matrix(x_vec, ncol = 1L))
+    # Geweke z -> two-sided p
+    gw <- try(coda::geweke.diag(x_mcmc), silent = TRUE)
+    geweke_p <- if (inherits(gw, "try-error") || is.null(gw$z)) {
+      NA_real_
+    } else {
+      2 * (1 - stats::pnorm(abs(as.numeric(gw$z))))
+    }
+    # ESS
+    ess <- try(as.numeric(coda::effectiveSize(x_mcmc)), silent = TRUE)
+    if (inherits(ess, "try-error") || length(ess) == 0L) ess <- NA_real_
+
   # --- legend ---
   leg_txt <- c(
     sprintf("Geweke p = %s",
@@ -96,7 +101,7 @@ MCMC_plot <- function(
             ifelse(is.finite(ess), format(round(ess, 0), scientific = FALSE), "NA"))
   )
   graphics::legend(legend_pos, legend = leg_txt, bty = "n", cex = cex_leg)
-
+  }
   invisible(list(
     mean = mean(x_vec),
     geweke_p = geweke_p,
@@ -107,7 +112,7 @@ MCMC_plot <- function(
 }
 
 
-
+#plotting uniform color (more ideal for real data where true nonnulls are unknown) ----
 #' @title Plot posterior credible intervals across outcomes
 #'
 #' @description
@@ -140,6 +145,7 @@ MCMC_plot <- function(
 #' @param show_legend NULL (auto: hide if one outcome), TRUE, or FALSE.
 #' @param verbose Logical; print brief diagnostics.
 #' @param base_size Base font size for theme (default 22).
+#' @param bracket_text_size Font size for the group names (default 4.5, different scale then base_size)
 #'
 #' @return List with:
 #' \item{plot}{ggplot object}
@@ -191,7 +197,7 @@ MCMC_plot <- function(
 #' @importFrom stats setNames median
 #' @importFrom rlang .data
 #' @export
-plot_cri_across_outcomes <- function(
+plot_cri <- function(
     outcomes,
     outcome_labels = NULL,
     betas = NULL,
@@ -210,9 +216,9 @@ plot_cri_across_outcomes <- function(
     add_brackets = TRUE,
     legend_title = "Outcome",
     show_legend = NULL,
-    verbose = TRUE
     verbose = TRUE,
-    base_size = 22
+    base_size = 22,
+    bracket_text_size =4.5
 ){
   if (!requireNamespace("bayestestR", quietly = TRUE))
     stop("Package 'bayestestR' is required. Please install it.")
@@ -235,50 +241,43 @@ plot_cri_across_outcomes <- function(
       stop("Names(betas) must include all 'outcomes'.")
   }
 
-  # ---- Helpers ----
-  normalize_beta <- function(M, preds, intercept_names){
-  normalize_beta <- function(M, preds, intercept_names) {
+  # ---- Helpers
+  normalize_beta <- function(M, predictors, intercept_names) {
     M <- as.matrix(M)
-    if (is.null(colnames(M))) stop("Beta matrix must have column names.")
 
-    # --- auto-fix orientation if names live on rows (common p x n_iter) ---
-    rn <- rownames(M); cn <- colnames(M)
-    rn_match <- if (!is.null(rn)) sum(rn %in% preds) else 0
-    cn_match <- if (!is.null(cn)) sum(cn %in% preds) else 0
-    if (rn_match > cn_match) {
-      M <- t(M)
-      cn <- colnames(M)
-    }
-
-    # --- if no column names, infer them from predictors (+ optional intercept) ---
+    # If no names, infer from predictors (+ optional intercept)
     if (is.null(colnames(M))) {
-      if (ncol(M) == length(preds)) {
-        colnames(M) <- preds
-      } else if (ncol(M) == length(preds) + 1) {
-        # assume an intercept column exists (first)
-        colnames(M) <- c("(Intercept)", preds)
+      if (ncol(M) == length(predictors)) {
+        colnames(M) <- predictors
+      } else if (ncol(M) == length(predictors) + 1) {
+        colnames(M) <- c("(Intercept)", predictors)
       } else {
-        stop(sprintf(
-          "Cannot infer beta column names (ncol=%d; |predictors|=%d).",
-          ncol(M), length(preds)
-        ))
+        stop(sprintf("Cannot infer beta column names (ncol=%d; |predictors|=%d).",
+                     ncol(M), length(predictors)))
       }
     }
 
-    # --- drop intercept-like columns by name, if present ---
+    # orientation check still works
+    rn <- rownames(M); cn <- colnames(M)
+    rn_match <- if (!is.null(rn)) sum(rn %in% predictors) else 0
+    cn_match <- if (!is.null(cn)) sum(cn %in% predictors) else 0
+    if (rn_match > cn_match) {
+      M <- t(M)
+    }
+
+    # drop intercept-like
     keep <- !(colnames(M) %in% intercept_names)
     M <- M[, keep, drop = FALSE]
 
-    # --- align to requested predictors; fill missing with NA (will plot as gaps) ---
-    common  <- intersect(preds, colnames(M))
-    missing <- setdiff(preds, colnames(M))
-
+    # align to predictors, fill gaps
+    common  <- intersect(predictors, colnames(M))
+    missing <- setdiff(predictors, colnames(M))
     M2 <- cbind(
       M[, common, drop = FALSE],
       if (length(missing)) matrix(NA_real_, nrow(M), length(missing),
                                   dimnames = list(NULL, missing)) else NULL
     )
-    M2[, preds, drop = FALSE]
+    M2[, predictors, drop = FALSE]
   }
 
 
@@ -287,8 +286,7 @@ plot_cri_across_outcomes <- function(
     offset_bracket = 0.06,  # fraction of span below min
     offset_text    = 0.10,
     tick_frac      = 0.02,
-    line_col = "grey35", line_size = 0.6, text_size = 6
-    line_col = "grey35", line_size = 0.6, text_size = 4.5
+    line_col = "grey35", line_size = 0.6, text_size = bracket_text_size
   ){
     yr <- range(c(data_df$q_low, data_df$q_high, data_df$mean, data_df$median), na.rm = TRUE)
     span <- diff(yr); if (!is.finite(span) || span <= 0) span <- max(1, abs(yr[1L]))
@@ -330,7 +328,7 @@ plot_cri_across_outcomes <- function(
       ggplot2::theme(plot.margin = ggplot2::margin(10, 10, 10, 20))
   }
 
-  # ---- Grouping gate ----
+  # ---- Grouping gate
   if (!use_groups || is.null(group_map) || is.null(group_levels)) {
     group_map <- NULL
     group_levels <- NULL
@@ -354,7 +352,7 @@ plot_cri_across_outcomes <- function(
     pred_order <- predictors
   }
 
-  # ---- Collect across outcomes ----
+  # ---- Collect across outcomes
   rows <- list(); loaded <- list(); skipped <- list()
   for (k in outcomes) {
     M <- if (!is.null(betas)) betas[[k]] else load_beta(k, method)
@@ -423,17 +421,17 @@ plot_cri_across_outcomes <- function(
     levels(df_all$predictor)
   }
 
-  # ---- Plot ----
+  # ---- Plot
   pd <- ggplot2::position_dodge(width = 0.78)
   p <- ggplot2::ggplot(df_all, ggplot2::aes(x = .data$predictor, color = .data$Outcome)) +
     ggplot2::geom_linerange(ggplot2::aes(ymin = .data$q_low, ymax = .data$q_high), position = pd, linewidth = 1.1) +
     ggplot2::geom_point(ggplot2::aes(y = .data$star_y, fill = .data$Outcome),
-                        position = pd, shape = 8, size = 2.8, stroke = 0.7,
+                        position = pd, shape = 21, size = 2.8, stroke = 0.7,
                         show.legend = FALSE) +
     ggplot2::geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
     ggplot2::labs(
       x = NULL,
-      y = sprintf("Posterior Beta (%d%% ETI; star = %s)", round(cred_level*100), tolower(star)),
+      y = sprintf("Posterior Beta (%d%% ETI; circle = %s)", round(cred_level*100), tolower(star)),
       color = legend_title
     ) +
     ggplot2::theme_minimal(base_size = 18) +
@@ -441,11 +439,9 @@ plot_cri_across_outcomes <- function(
     ggplot2::theme(
       legend.position = if (legend_on) "bottom" else "none",
       legend.box = "horizontal",
-      axis.text.x = ggplot2::element_text(angle = 65, hjust = 1),
-      # axis.text.x = ggplot2::element_text(angle = 65, hjust = 1),
       panel.grid.minor.x = ggplot2::element_blank(),
       panel.grid.major.x = ggplot2::element_blank(),
-      axis.text.x = ggplot2::element_text(angle = 40, hjust = 1),
+      axis.text.x = ggplot2::element_text(angle = 60, hjust = 1),
       axis.ticks.x = ggplot2::element_line(color = "grey50"),
       axis.ticks.length.x = grid::unit(3, "pt"),
       panel.background   = ggplot2::element_rect(fill = "white", color = NA),
@@ -471,7 +467,7 @@ plot_cri_across_outcomes <- function(
 
   # Group brackets (scaled to data range so they don't get clipped)
   if (add_brackets && use_groups && !is.null(group_map)) {
-    p <- add_group_brackets_scaled_(p, df_all)
+    p <- add_group_brackets_scaled_(p, df_all,text_size = bracket_text_size)
   }
 
   list(plot = p, data = df_all, loaded = diag_loaded, skipped = diag_skipped)
@@ -483,16 +479,16 @@ plot_cri_across_outcomes <- function(
 #' @description
 #' Plot Posterior Inclusion Probabilities (PIPs) per predictor, across one or more
 #' outcomes, computed as column means of MCMC indicator matrices. Supply either:
-#' (i) a single matrix `pdelta_mat` (iterations × predictors) with an `outcome_name`,
+#' (i) a single matrix `pdelta_mat` (iterations x predictors) with an `outcome_name`,
 #' (i) a single matrix `pdelta_mat` (iterations x predictors) with an `outcome_name`,
 #' or (ii) a named list `pdelta_list` of such matrices (one per outcome).
 #' The argument `predictors` fixes x-axis order and inclusion.
 #'
 #' @param predictors Character vector of predictor keys (defines x-axis order/inclusion).
-#' @param pdelta_mat Optional numeric matrix (iterations × predictors) for a single outcome.
+#' @param pdelta_mat Optional numeric matrix (iterations x predictors) for a single outcome.
 #' @param pdelta_mat Optional numeric matrix (iterations x predictors) for a single outcome.
 #' @param outcome_name Optional single character label for `pdelta_mat` (required if `pdelta_mat` is used).
-#' @param pdelta_list Optional **named list** of numeric matrices (iterations × predictors), one per outcome.
+#' @param pdelta_list Optional **named list** of numeric matrices (iterations x predictors), one per outcome.
 #' @param pdelta_list Optional **named list** of numeric matrices (iterations x predictors), one per outcome.
 #'   List names are used as outcome labels. If provided, `pdelta_mat`/`outcome_name` are ignored.
 #' @param outcomes Optional character vector to subset outcomes (must match names in `pdelta_list`
@@ -516,6 +512,7 @@ plot_cri_across_outcomes <- function(
 #' @param dodge_width Dodge width for grouped bars (default 0.8).
 #' @param base_size Base font size for theme (default 22).
 #' @param verbose Logical; print brief diagnostics (default TRUE).
+#' @param bracket_text_size Font size for the group names (default 4.5, different scale then base_size)
 #'
 #' @return A list with \item{plot}{ggplot object} and \item{data}{data.frame used for plotting}.
 #'
@@ -542,7 +539,6 @@ plot_cri_across_outcomes <- function(
 #'   predictors       = predictors,
 #'   pdelta_list      = pdelta_list,
 #'   predictor_labels = setNames(toupper(predictors), predictors),
-#'   group_map        = c(x1="Demog", x2="Demog", x3="Behavior", x4="Behavior", x5="Access", x6="Access"),
 #'   group_map = c(x1="Demog", x2="Demog", x3="Behavior",
 #'   x4="Behavior", x5="Access", x6="Access"),
 #'   group_levels     = c("Demog","Behavior","Access"),
@@ -579,7 +575,8 @@ plot_pdelta_bars_mcmc <- function(
     bar_width       = 0.75,
     dodge_width     = 0.8,
     base_size       = 22,
-    verbose         = TRUE
+    verbose         = TRUE,
+    bracket_text_size = 4.5
 ){
   x_order   <- match.arg(x_order)
   use_groups <- isTRUE(use_groups)
@@ -599,7 +596,7 @@ plot_pdelta_bars_mcmc <- function(
     }
     built <- lapply(names(list_use), function(out) {
       mat <- list_use[[out]]
-      if (!is.matrix(mat)) stop("Each element of `pdelta_list` must be a matrix (iterations × predictors).")
+      if (!is.matrix(mat)) stop("Each element of `pdelta_list` must be a matrix (iterations x predictors).")
       if (!is.matrix(mat)) stop("Each element of `pdelta_list` must be a matrix (iterations x predictors).")
       if (ncol(mat) != length(predictors)) {
         stop(sprintf("Outcome '%s': ncol(matrix) = %d != length(predictors) = %d",
@@ -618,7 +615,7 @@ plot_pdelta_bars_mcmc <- function(
     if (is.null(outcome_name) || length(outcome_name) != 1L) {
       stop("Provide a single `outcome_name` when using `pdelta_mat`.")
     }
-    if (!is.matrix(pdelta_mat)) stop("`pdelta_mat` must be a matrix (iterations × predictors).")
+    if (!is.matrix(pdelta_mat)) stop("`pdelta_mat` must be a matrix (iterations x predictors).")
     if (!is.matrix(pdelta_mat)) stop("`pdelta_mat` must be a matrix (iterations x predictors).")
     if (ncol(pdelta_mat) != length(predictors)) {
       stop(sprintf("ncol(pdelta_mat) = %d != length(predictors) = %d",
@@ -761,7 +758,7 @@ plot_pdelta_bars_mcmc <- function(
 
   # ---- optional group brackets
   if (use_groups && !is.null(group_map)) {
-    p <- add_group_brackets_scaled_(p, d)
+    p <- add_group_brackets_scaled_(p, d, text_size = bracket_text_size)
   }
 
   list(plot = p, data = d)
@@ -771,7 +768,7 @@ plot_pdelta_bars_mcmc <- function(
 add_group_brackets_scaled_ <- function(
     p, data_df,
     y_frac = 0.10, tick_frac = 0.04, text_frac = 0.15,
-    line_col = "grey35", line_size = 0.6, text_size = 4.5
+    line_col = "grey35", line_size = 0.6, text_size = bracket_text_size
 ){
   ymax <- max(data_df$pDelta, na.rm = TRUE); if (!is.finite(ymax) || ymax <= 0) ymax <- 1
   y_min  <- -y_frac  * ymax
@@ -792,6 +789,830 @@ add_group_brackets_scaled_ <- function(
                           ggplot2::aes(x = .data$xmin - 0.45, xend = .data$xmax + 0.45,
                                        y = y_min, yend = y_min),
                           inherit.aes = FALSE, linewidth = line_size, color = line_col
+    ) +
+    ggplot2::geom_segment(
+      data = ranges,
+      ggplot2::aes(x = .data$xmin - 0.45, xend = .data$xmin - 0.45, y = y_min, yend = y_min + tick_h),
+      inherit.aes = FALSE, linewidth = line_size, color = line_col
+    ) +
+    ggplot2::geom_segment(
+      data = ranges,
+      ggplot2::aes(x = .data$xmax + 0.45, xend = .data$xmax + 0.45, y = y_min, yend = y_min + tick_h),
+      inherit.aes = FALSE, linewidth = line_size, color = line_col
+    ) +
+    ggplot2::annotate(
+      "text",
+      x = (ranges$xmin + ranges$xmax)/2, y = y_txt,
+      label = ranges$group_lbl, size = text_size, color = "grey20"
+    ) +
+    ggplot2::coord_cartesian(clip = "off") +
+    ggplot2::expand_limits(y = y_txt) +
+    ggplot2::theme(plot.margin = ggplot2::margin(10, 10, 10, 20))
+}
+
+
+
+# plots with highlights (ideal for simulations or highlighting significant features) ----
+#' @title Plot ETI Credible Intervals Across Outcomes (with Highlighted Predictors)
+#'
+#' @description Builds a comparative plot of posterior coefficients across one or more outcomes,
+#' drawing Equal-Tailed Interval (ETI) credible intervals and a point summary
+#' (mean or median) per predictor. Predictors can be ordered by groups and
+#' optionally highlighted (by index or by name) to emphasize, e.g., truly
+#' non-null features in simulations.
+#'
+#' @param outcomes Character vector of outcome keys to include.
+#' @param outcome_labels Optional named character vector mapping outcome keys
+#'   in \code{outcomes} to pretty display labels. If \code{NULL}, keys are used.
+#' @param betas Optional named list of posterior draws for each outcome. Each
+#'   element is a matrix (iterations x coefficients). If \code{NULL}, provide
+#'   \code{load_beta()}.
+#' @param load_beta Optional function \code{function(outcome, method)} that
+#'   returns the posterior draws matrix for the requested \code{outcome}.
+#'   Used when \code{betas} is \code{NULL}.
+#' @param method Character scalar passed to \code{load_beta()} (e.g., "HS", "SS").
+#' @param predictors Character vector giving the predictors to display (order on x-axis).
+#' @param predictor_labels Optional named character vector mapping predictor names
+#'   (levels on x-axis) to pretty labels.
+#' @param group_map Optional named vector mapping each predictor to a group label.
+#' @param group_levels Optional character vector specifying the display order of
+#'   group labels (required if \code{use_groups=TRUE}).
+#' @param use_groups Logical; if \code{TRUE}, draws group brackets/labels under the x-axis.
+#' @param intercept_names Character vector of column names treated as intercepts
+#'   to be dropped (e.g., \code{c("(Intercept)","Intercept","beta0","beta_0","")}).
+#' @param cred_level Numeric in (0,1); ETI credible level (default 0.95).
+#' @param star Either \code{"mean"} or \code{"median"}; which summary to show as the point.
+#' @param x_order Either \code{"group"} (order predictors by \code{group_map})
+#'   or \code{"given"} (keep the input \code{predictors} order).
+#' @param colors Optional named vector of colors for outcomes (applies to line/point color/fill).
+#' @param add_brackets Logical; add group brackets under the x-axis when \code{use_groups=TRUE}.
+#' @param legend_title Character; legend title for outcomes.
+#' @param show_legend Logical; whether to show the legend. If \code{NULL}, shows
+#'   only when multiple outcomes are present.
+#' @param verbose Logical; print simple diagnostics (loaded/skipped outcomes, coercions).
+#' @param base_size Base font size for the theme.
+#' @param bracket_text_size Font size for group labels under the axis.
+#'
+#' @param highlight_idx Indices (1-based, in plotted x-axis order) \emph{or}
+#'   predictor names to highlight. Defaults to \code{integer(0)} (no highlights).
+#' @param nonhighlight_alpha Numeric in `[0,1]`; alpha used to fade non-highlighted
+#'   intervals/points (default 0.35).
+#' @param highlight_size_mult Numeric > 0; thickness multiplier for highlighted
+#'   intervals (default 1.6 relative to base).
+#' @param highlight_point_mult Numeric > 0; size multiplier for highlighted points
+#'   (default 1.5 relative to base).
+#'
+#' @details
+#' Each outcome’s posterior draw matrix may contain an intercept column; names
+#' matching \code{intercept_names} are dropped. Remaining columns are aligned
+#' to \code{predictors}; any missing predictors are filled with \code{NA} columns.
+#' ETI bounds are computed via \pkg{bayestestR}. Highlights are overlaid on top
+#' of the base plot (which is slightly faded by \code{nonhighlight_alpha}) while
+#' preserving outcome colors.
+#'
+#' @return A list with:
+#' \describe{
+#'   \item{\code{plot}}{A \pkg{ggplot2} object.}
+#'   \item{\code{data}}{Tidy data frame used to build the plot (per predictor x outcome).}
+#'   \item{\code{loaded}}{Diagnostics table of loaded outcomes.}
+#'   \item{\code{skipped}}{Diagnostics table of skipped outcomes (with reasons).}
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' # Suppose 'draws_HS' and 'draws_SS' are (iterations x p)
+#' # matrices of posterior betas:
+#' outcomes   <- c("HS","SS")
+#' predictors <- paste0("X", 1:20)
+#' res <- plot_cri_across_outcomes(
+#'   outcomes   = outcomes,
+#'   predictors = predictors,
+#'   betas = list(HS = draws_HS, SS = draws_SS),
+#'   x_order = "group",
+#'   group_map = setNames(rep(letters[1:4], each = 5), predictors),
+#'   group_levels = letters[1:4],
+#'   cred_level = 0.95,
+#'   star = "median",
+#'   # highlight a few predictors (by index)
+#'   highlight_idx = c(2, 7, 13),
+#'   highlight_glow_color = "#1F77B4"
+#' )
+#' print(res$plot)
+#'
+#' # Highlight by predictor names instead:
+#' res2 <- plot_cri_across_outcomes(
+#'   outcomes   = "HS",
+#'   predictors = predictors,
+#'   betas = list(HS = draws_HS),
+#'   highlight_idx = c("X3","X10")
+#' )
+#' }
+#'
+#' @import ggplot2
+#' @importFrom bayestestR ci
+#' @importFrom dplyr bind_rows distinct arrange mutate group_by summarise filter
+#' @importFrom rlang .data
+#' @export
+
+plot_cri_highlights <- function(
+    outcomes,
+    outcome_labels = NULL,
+    betas = NULL,
+    load_beta = NULL,
+    method = "HS",
+    predictors,
+    predictor_labels = NULL,
+    group_map = NULL,
+    group_levels = NULL,
+    use_groups = TRUE,
+    intercept_names = c("(Intercept)","Intercept","beta0","beta_0",""),
+    cred_level = 0.95,
+    star = c("mean","median"),
+    x_order = c("group","given"),
+    colors = NULL,
+    add_brackets = TRUE,
+    legend_title = "Outcome",
+    show_legend = NULL,
+    verbose = TRUE,
+    base_size = 22,
+    bracket_text_size = 4.5,
+    # --- NEW highlight controls ---
+    highlight_idx = integer(0),         # indices (1-based, x-axis order) OR predictor names
+    nonhighlight_alpha = 0.35,          # fade non-highlighted items
+    highlight_size_mult = 1.6,          # interval thickness multiplier for highlights
+    highlight_point_mult = 1.5         # point size multiplier for highlights
+){
+  if (!requireNamespace("bayestestR", quietly = TRUE))
+    stop("Package 'bayestestR' is required. Please install it.")
+  if (!requireNamespace("ggplot2", quietly = TRUE))
+    stop("Package 'ggplot2' is required. Please install it.")
+  if (!requireNamespace("dplyr", quietly = TRUE))
+    stop("Package 'dplyr' is required. Please install it.")
+  if (!requireNamespace("rlang", quietly = TRUE))
+    stop("Package 'rlang' is required. Please install it.")
+  .data <- rlang::.data
+
+  star    <- match.arg(star)
+  x_order <- match.arg(x_order)
+  use_groups <- isTRUE(use_groups)
+
+  # Pretty outcome names
+  pretty <- if (is.null(outcome_labels)) setNames(outcomes, outcomes) else outcome_labels
+  if (!all(outcomes %in% names(pretty)))
+    stop("All outcomes must have labels in 'outcome_labels' (or omit to use keys).")
+
+  # Input sources
+  if (is.null(betas)) {
+    if (!is.function(load_beta))
+      stop("Provide either 'betas' (named list) or a 'load_beta(outcome, method)' function.")
+  } else {
+    if (!all(outcomes %in% names(betas)))
+      stop("Names(betas) must include all 'outcomes'.")
+  }
+
+  # ---- Helpers
+  normalize_beta <- function(M, predictors, intercept_names) {
+    M <- as.matrix(M)
+
+    if (is.null(colnames(M))) {
+      if (ncol(M) == length(predictors)) {
+        colnames(M) <- predictors
+      } else if (ncol(M) == length(predictors) + 1) {
+        colnames(M) <- c("(Intercept)", predictors)
+      } else {
+        stop(sprintf("Cannot infer beta column names (ncol=%d; |predictors|=%d).",
+                     ncol(M), length(predictors)))
+      }
+    }
+
+    rn <- rownames(M); cn <- colnames(M)
+    rn_match <- if (!is.null(rn)) sum(rn %in% predictors) else 0
+    cn_match <- if (!is.null(cn)) sum(cn %in% predictors) else 0
+    if (rn_match > cn_match) {
+      M <- t(M)
+    }
+
+    keep <- !(colnames(M) %in% intercept_names)
+    M <- M[, keep, drop = FALSE]
+
+    common  <- intersect(predictors, colnames(M))
+    missing <- setdiff(predictors, colnames(M))
+    M2 <- cbind(
+      M[, common, drop = FALSE],
+      if (length(missing)) matrix(NA_real_, nrow(M), length(missing),
+                                  dimnames = list(NULL, missing)) else NULL
+    )
+    M2[, predictors, drop = FALSE]
+  }
+
+  add_group_brackets_scaled_ <- function(
+    p, data_df,
+    offset_bracket = 0.06,
+    offset_text    = 0.10,
+    tick_frac      = 0.02,
+    line_col = "grey35", line_size = 0.6, text_size = bracket_text_size
+  ){
+    yr <- range(c(data_df$q_low, data_df$q_high, data_df$mean, data_df$median), na.rm = TRUE)
+    span <- diff(yr); if (!is.finite(span) || span <= 0) span <- max(1, abs(yr[1L]))
+    y_b <- yr[1L] - offset_bracket * span
+    y_t <- yr[1L] - offset_text    * span
+    tick_h <- tick_frac * span
+
+    df <- dplyr::distinct(data_df, .data$predictor, .data$group_lbl) |>
+      dplyr::arrange(.data$predictor) |>
+      dplyr::mutate(x = as.numeric(.data$predictor))
+    ranges <- df |>
+      dplyr::filter(!is.na(.data$group_lbl)) |>
+      dplyr::group_by(.data$group_lbl) |>
+      dplyr::summarise(xmin = min(.data$x), xmax = max(.data$x), .groups = "drop")
+
+    p +
+      ggplot2::geom_segment(
+        data = ranges,
+        ggplot2::aes(x = .data$xmin - 0.45, xend = .data$xmax + 0.45, y = y_b, yend = y_b),
+        inherit.aes = FALSE, linewidth = line_size, color = line_col
+      ) +
+      ggplot2::geom_segment(
+        data = ranges,
+        ggplot2::aes(x = .data$xmin - 0.45, xend = .data$xmin - 0.45, y = y_b, yend = y_b + tick_h),
+        inherit.aes = FALSE, linewidth = line_size, color = line_col
+      ) +
+      ggplot2::geom_segment(
+        data = ranges,
+        ggplot2::aes(x = .data$xmax + 0.45, xend = .data$xmax + 0.45, y = y_b, yend = y_b + tick_h),
+        inherit.aes = FALSE, linewidth = line_size, color = line_col
+      ) +
+      ggplot2::annotate(
+        "text",
+        x = (ranges$xmin + ranges$xmax)/2, y = y_t,
+        label = ranges$group_lbl, size = text_size, color = "grey20"
+      ) +
+      ggplot2::coord_cartesian(clip = "off") +
+      ggplot2::expand_limits(y = y_t) +
+      ggplot2::theme(plot.margin = ggplot2::margin(10, 10, 10, 20))
+  }
+
+  # ---- Grouping gate
+  if (!use_groups || is.null(group_map) || is.null(group_levels)) {
+    group_map <- NULL
+    group_levels <- NULL
+    if (x_order == "group") {
+      if (verbose) message("Grouping disabled: coercing x_order='group' to 'given'.")
+      x_order <- "given"
+    }
+  }
+
+  # X order
+  if (x_order == "group") {
+    ord_df <- data.frame(
+      predictor = predictors,
+      group_lbl = unname(group_map[predictors]),
+      stringsAsFactors = FALSE
+    )
+    ord_df$group_lbl <- factor(ord_df$group_lbl, levels = group_levels)
+    ord_df <- ord_df[order(ord_df$group_lbl, match(ord_df$predictor, predictors)), ]
+    pred_order <- ord_df$predictor
+  } else {
+    pred_order <- predictors
+  }
+
+  # ---- Collect across outcomes
+  rows <- list(); loaded <- list(); skipped <- list()
+  for (k in outcomes) {
+    M <- if (!is.null(betas)) betas[[k]] else load_beta(k, method)
+    if (is.null(M)) { skipped[[length(skipped)+1]] <- data.frame(outcome=k, reason="not found"); next }
+    if (nrow(M) < 20L) { skipped[[length(skipped)+1]] <- data.frame(outcome=k, reason="<20 iterations"); next }
+
+    M <- try(normalize_beta(M, predictors, intercept_names), silent = TRUE)
+    if (inherits(M, "try-error")) {
+      skipped[[length(skipped)+1]] <- data.frame(outcome=k, reason="column name mismatch"); next
+    }
+
+    cn <- colnames(M)
+    get_ci_bounds <- function(v) {
+      ci_df <- bayestestR::ci(v, ci = cred_level, method = "ETI")
+      c(low  = min(ci_df$CI_low, ci_df$CI_high, na.rm = TRUE),
+        high = max(ci_df$CI_low, ci_df$CI_high, na.rm = TRUE))
+    }
+    ci_mat <- sapply(cn, function(nm) get_ci_bounds(M[, nm]))
+    q_low  <- stats::setNames(ci_mat["low",  ], cn)
+    q_high <- stats::setNames(ci_mat["high", ], cn)
+
+    lab <- pretty[[k]]
+    rows[[length(rows)+1]] <- data.frame(
+      Outcome   = lab,
+      predictor = factor(pred_order, levels = pred_order),
+      q_low     = as.numeric(q_low [pred_order]),
+      q_high    = as.numeric(q_high[pred_order]),
+      median    = apply(M[, pred_order, drop = FALSE], 2, median,   na.rm = TRUE),
+      mean      = colMeans(M[, pred_order, drop = FALSE],           na.rm = TRUE),
+      group_lbl = if (!is.null(group_map))
+        factor(unname(group_map[pred_order]), levels = group_levels)
+      else factor(NA_character_, levels = NULL),
+      stringsAsFactors = FALSE
+    )
+
+    loaded[[length(loaded)+1]] <- data.frame(
+      outcome_key = k, pretty = lab, n_iter = nrow(M), n_pred = ncol(M),
+      stringsAsFactors = FALSE
+    )
+  }
+
+  if (!length(rows)) stop("No outcomes loaded. Check inputs.")
+  df_all <- dplyr::bind_rows(rows)
+  diag_loaded  <- if (length(loaded))  dplyr::bind_rows(loaded)  else data.frame()
+  diag_skipped <- if (length(skipped)) dplyr::bind_rows(skipped) else data.frame()
+
+  if (verbose && nrow(diag_loaded))  print(diag_loaded)
+  if (verbose && nrow(diag_skipped)) message("Skipped:\n", paste(utils::capture.output(print(diag_skipped)), collapse = "\n"))
+
+  # star statistic
+  df_all$star_y <- if (star == "mean") df_all$mean else df_all$median
+
+  # legend visibility
+  present_outcomes <- as.character(unique(df_all$Outcome))
+  legend_on <- if (is.null(show_legend)) length(present_outcomes) > 1 else isTRUE(show_legend)
+
+  # x-axis labels
+  xlabs <- if (!is.null(predictor_labels)) {
+    labvec <- predictor_labels[as.character(levels(df_all$predictor))]
+    labvec[is.na(labvec)] <- as.character(levels(df_all$predictor))[is.na(labvec)]
+    labvec
+  } else {
+    levels(df_all$predictor)
+  }
+
+  # ---- Highlight mapping (indices or names) => logical col
+  df_all$is_highlight <- FALSE
+  lvl <- levels(df_all$predictor)
+  if (is.numeric(highlight_idx)) {
+    idx <- unique(highlight_idx[highlight_idx >= 1 & highlight_idx <= length(lvl)])
+    want <- lvl[idx]
+  } else if (is.character(highlight_idx)) {
+    want <- intersect(highlight_idx, lvl)
+  } else {
+    want <- character(0)
+  }
+  if (length(want)) {
+    df_all$is_highlight <- as.character(df_all$predictor) %in% want
+  }
+
+  # ---- Plot (base = all predictors, slightly faded)
+  pd <- ggplot2::position_dodge(width = 0.78)
+  base_line_size  <- 1.1
+  base_point_size <- 2.8
+
+  p <- ggplot2::ggplot(df_all, ggplot2::aes(x = .data$predictor, color = .data$Outcome)) +
+    ggplot2::geom_linerange(
+      ggplot2::aes(ymin = .data$q_low, ymax = .data$q_high),
+      position = pd, linewidth = base_line_size, alpha = nonhighlight_alpha
+    ) +
+    ggplot2::geom_point(
+      ggplot2::aes(y = .data$star_y, fill = .data$Outcome),
+      position = pd, shape = 21, size = base_point_size, stroke = 0.3,
+      alpha = nonhighlight_alpha, show.legend = FALSE
+    ) +
+    ggplot2::geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
+    ggplot2::labs(
+      x = NULL,
+      y = sprintf("Posterior Beta (%d%% ETI; circle = %s)", round(cred_level*100), tolower(star)),
+      color = legend_title
+    ) +
+    ggplot2::theme_minimal(base_size = base_size) +
+    ggplot2::theme(
+      legend.position = if (legend_on) "bottom" else "none",
+      legend.box = "horizontal",
+      panel.grid.minor.x = ggplot2::element_blank(),
+      panel.grid.major.x = ggplot2::element_blank(),
+      axis.text.x = ggplot2::element_text(angle = 60, hjust = 1),
+      axis.ticks.x = ggplot2::element_line(color = "grey50"),
+      axis.ticks.length.x = grid::unit(3, "pt"),
+      panel.background   = ggplot2::element_rect(fill = "white", color = NA),
+      plot.background    = ggplot2::element_rect(fill = "white", color = NA),
+      legend.background  = ggplot2::element_rect(fill = "white", color = NA),
+      legend.box.background = ggplot2::element_rect(fill = "white", color = NA)
+    ) +
+    ggplot2::scale_x_discrete(labels = xlabs)
+
+  # Outcome color overrides if provided
+  if (!is.null(colors)) {
+    if (is.null(names(colors)) && length(colors) == 1L) {
+      colors <- stats::setNames(colors, present_outcomes)
+    } else {
+      colors <- colors[names(colors) %in% present_outcomes]
+    }
+    if (length(colors)) {
+      p <- p +
+        ggplot2::scale_color_manual(values = colors, limits = names(colors), drop = FALSE, name = legend_title) +
+        ggplot2::scale_fill_manual(values = colors, limits = names(colors), drop = FALSE, name = legend_title)
+    }
+  }
+
+
+  # ---- Foreground highlight overlay
+  if (any(df_all$is_highlight)) {
+    p <- p +
+      ggplot2::geom_linerange(
+        data = df_all[df_all$is_highlight, , drop = FALSE],
+        ggplot2::aes(x = .data$predictor, ymin = .data$q_low, ymax = .data$q_high,
+                     color = .data$Outcome),
+        inherit.aes = FALSE,
+        position = pd, linewidth = base_line_size * highlight_size_mult, alpha = 1
+      ) +
+      ggplot2::geom_point(
+        data = df_all[df_all$is_highlight, , drop = FALSE],
+        ggplot2::aes(x = .data$predictor, y = .data$star_y, fill = .data$Outcome),
+        inherit.aes = FALSE,
+        position = pd, shape = 21, size = base_point_size * highlight_point_mult, stroke = 0.4, alpha = 1,
+        show.legend = FALSE
+      )
+  }
+
+  # Group brackets (scaled to data range so they don't get clipped)
+  if (add_brackets && use_groups && !is.null(group_map)) {
+    p <- add_group_brackets_scaled_(p, df_all, text_size = bracket_text_size)
+  }
+
+  list(plot = p, data = df_all, loaded = diag_loaded, skipped = diag_skipped)
+}
+
+
+
+#' @title Plot Posterior Inclusion Probabilities with Highlighted Predictors
+#'
+#' @description Creates a bar plot of posterior inclusion probabilities (PIPs, a.k.a. \eqn{p\Delta})
+#' for a set of predictors across one or more outcomes. The function supports
+#' both a single outcome matrix (`pdelta_mat`) and a list of outcome matrices
+#' (`pdelta_list`). Predictors can be grouped into blocks, with optional
+#' bracket annotations under the x-axis. Specific predictors (e.g. truly
+#' non-nulls in a simulation) can be highlighted either by index or by name.
+#'
+#' @param predictors Character vector of predictor names (must align with columns of `pdelta_mat` or each element of `pdelta_list`).
+#' @param pdelta_mat Numeric matrix (iterations x predictors) of posterior inclusion probabilities for a single outcome.
+#' @param outcome_name Character scalar giving the outcome label for `pdelta_mat`.
+#' @param pdelta_list Named list of matrices (iterations x predictors), one per outcome.
+#' @param outcomes Optional character vector of outcomes to subset from `pdelta_list`.
+#' @param outcome_labels Named character vector mapping outcome names to pretty labels.
+#' @param predictor_labels Named character vector mapping predictor names to pretty labels.
+#' @param group_map Named vector mapping each predictor to a group label.
+#' @param group_levels Character vector giving the order of group labels for plotting.
+#' @param use_groups Logical; if `TRUE`, group bands and labels are drawn under the x-axis.
+#' @param x_order Either `"group"` (order predictors by group) or `"given"` (use input order).
+#' @param thresholds Numeric vector of horizontal reference lines to add to the plot.
+#' @param threshold_colors Colors to use for each threshold line.
+#' @param colors Optional named vector of fill colors for outcomes (used if `keep_outcome_palette = TRUE`).
+#' @param legend_title Title for the legend.
+#' @param show_legend Logical; whether to show the legend. Defaults to `TRUE` if more than one outcome.
+#' @param bar_width Width of the bars (passed to `geom_col()`).
+#' @param dodge_width Width of dodge spacing for multiple outcomes.
+#' @param base_size Base font size for `theme_minimal()`.
+#' @param bracket_text_size Font size for group bracket labels.
+#' @param verbose Logical; print messages if coercing x order.
+#' @param highlight_idx Indices (1-based, matching x-axis order) or predictor names to highlight.
+#' @param highlight_fill Fill color for highlighted predictors (two-color mode).
+#' @param nonhighlight_alpha Numeric. Alpha (transparency) for non-highlighted bars.
+#' @param keep_outcome_palette Logical; if `TRUE`, keep outcome-based fill colors and outline highlighted bars. If `FALSE`, use two-color fill (highlight vs. other).
+#'
+#' @return A list with two elements:
+#' \describe{
+#'   \item{plot}{A `ggplot2` object.}
+#'   \item{data}{The tidy data frame used to create the plot.}
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' # Example with one outcome
+#' predictors <- paste0("X", 1:10)
+#' mat <- matrix(runif(1000), nrow = 100, ncol = 10)
+#' res <- plot_pdelta_bars_mcmc_highlights(
+#'   predictors    = predictors,
+#'   pdelta_mat    = mat,
+#'   outcome_name  = "Simulation",
+#'   highlight_idx = c(2, 5, 7)
+#' )
+#' print(res$plot)
+#' }
+#'
+#' @import ggplot2
+#' @importFrom dplyr distinct arrange mutate group_by summarise filter
+#' @importFrom rlang .data
+#' @export
+plot_pdelta_bars_mcmc_highlights <- function(
+    predictors,
+    pdelta_mat      = NULL,
+    outcome_name    = NULL,
+    pdelta_list     = NULL,
+    outcomes        = NULL,
+    outcome_labels  = NULL,
+    predictor_labels= NULL,
+    group_map       = NULL,
+    group_levels    = NULL,
+    use_groups      = TRUE,
+    x_order         = c("group","given"),
+    thresholds      = 0.75,
+    threshold_colors= NULL,
+    colors          = NULL,
+    legend_title    = "Outcome",
+    show_legend     = NULL,
+    bar_width       = 0.75,
+    dodge_width     = 0.8,
+    base_size       = 22,
+    bracket_text_size = 4.5,
+    verbose = TRUE,
+    highlight_idx   = integer(0),     # indices or names to highlight
+    highlight_fill  = "#F8766D",      # color for highlights
+    nonhighlight_alpha = 0.35,     # fade level for non-highlighted bars
+    keep_outcome_palette = FALSE      # TRUE = keep outcome palette, outline highlights
+){
+  # ---- deps
+  if (!requireNamespace("ggplot2", quietly = TRUE)) stop("Please install ggplot2.")
+  if (!requireNamespace("rlang", quietly = TRUE)) stop("Please install rlang.")
+  if (!requireNamespace("dplyr", quietly = TRUE)) stop("Please install dplyr.")
+  .data <- rlang::.data  # pronoun alias
+
+  x_order   <- match.arg(x_order)
+  use_groups <- isTRUE(use_groups)
+
+  if (missing(predictors) || !length(predictors)) stop("`predictors` must be provided and non-empty.")
+
+  # ---- Build tidy data (colMeans of pDelta)
+  if (!is.null(pdelta_list)) {
+    if (is.null(names(pdelta_list)) || any(names(pdelta_list) == "")) {
+      stop("`pdelta_list` must be a *named* list; names are used as outcome labels.")
+    }
+    list_use <- if (is.null(outcomes)) pdelta_list else {
+      miss <- setdiff(outcomes, names(pdelta_list))
+      if (length(miss)) stop("Requested outcomes not in `pdelta_list`: ", paste(miss, collapse = ", "))
+      pdelta_list[outcomes]
+    }
+    built <- lapply(names(list_use), function(out) {
+      mat <- list_use[[out]]
+      if (!is.matrix(mat)) stop("Each element of `pdelta_list` must be a matrix (iterations x predictors).")
+      if (ncol(mat) != length(predictors)) {
+        stop(sprintf("Outcome '%s': ncol(matrix) = %d != length(predictors) = %d",
+                     out, ncol(mat), length(predictors)))
+      }
+      data.frame(
+        Outcome   = out,
+        predictor = predictors,
+        pDelta    = colMeans(mat, na.rm = TRUE),
+        stringsAsFactors = FALSE
+      )
+    })
+    d <- do.call(rbind, built)
+
+  } else if (!is.null(pdelta_mat)) {
+    if (is.null(outcome_name) || length(outcome_name) != 1L) {
+      stop("Provide a single `outcome_name` when using `pdelta_mat`.")
+    }
+    if (!is.matrix(pdelta_mat)) stop("`pdelta_mat` must be a matrix (iterations x predictors).")
+    if (ncol(pdelta_mat) != length(predictors)) {
+      stop(sprintf("ncol(pdelta_mat) = %d != length(predictors) = %d",
+                   ncol(pdelta_mat), length(predictors)))
+    }
+    if (!is.null(outcomes) && !(outcome_name %in% outcomes)) {
+      stop("`outcome_name` not included in requested `outcomes`.")
+    }
+    d <- data.frame(
+      Outcome   = outcome_name,
+      predictor = predictors,
+      pDelta    = colMeans(pdelta_mat, na.rm = TRUE),
+      stringsAsFactors = FALSE
+    )
+
+  } else {
+    stop("Provide either `pdelta_mat` (with `outcome_name`) or `pdelta_list`.")
+  }
+
+  # ---- Pretty outcome names
+  present_keys <- unique(d$Outcome)
+  pretty <- if (is.null(outcome_labels)) stats::setNames(present_keys, present_keys) else outcome_labels
+  if (!all(present_keys %in% names(pretty))) {
+    missing <- setdiff(present_keys, names(pretty))
+    stop("Missing labels for outcomes: ", paste(missing, collapse = ", "))
+  }
+  d$Outcome <- pretty[match(d$Outcome, names(pretty))]
+
+  # NA/Inf pDelta -> 0 for plotting
+  d$pDelta[!is.finite(d$pDelta)] <- NA_real_
+  d$pDelta <- ifelse(is.na(d$pDelta), 0, d$pDelta)
+
+  # ---- Grouping gate & x order
+  if (!use_groups || is.null(group_map) || is.null(group_levels)) {
+    group_map <- NULL
+    group_levels <- NULL
+    if (x_order == "group") {
+      if (verbose) message("Grouping disabled: coercing x_order='group' to 'given'.")
+      x_order <- "given"
+    }
+  }
+
+  # predictor order
+  if (x_order == "group") {
+    ord_df <- data.frame(
+      predictor = predictors,
+      group_lbl = unname(group_map[predictors]),
+      stringsAsFactors = FALSE
+    )
+    ord_df$group_lbl <- factor(ord_df$group_lbl, levels = group_levels)
+    ord_df <- ord_df[order(ord_df$group_lbl, match(ord_df$predictor, predictors)), ]
+    pred_order <- ord_df$predictor
+  } else {
+    pred_order <- predictors
+  }
+
+  # complete grid (ensures 0s for missing combos)
+  all_df <- expand.grid(
+    Outcome   = unique(d$Outcome),
+    predictor = predictors,
+    stringsAsFactors = FALSE
+  )
+  d <- merge(all_df, d, by = c("Outcome","predictor"), all.x = TRUE)
+  d$pDelta <- ifelse(is.na(d$pDelta), 0, d$pDelta)
+
+  d$predictor <- factor(d$predictor, levels = pred_order)
+  if (!is.null(group_map)) {
+    d$group_lbl <- factor(unname(group_map[as.character(d$predictor)]), levels = group_levels)
+  } else {
+    d$group_lbl <- factor(NA_character_)
+  }
+
+  # ---- Highlight mapping (by index or name); ALWAYS length nrow(d)
+  d$is_highlight <- FALSE
+  lvl <- levels(d$predictor)  # x-axis order (character vector)
+  if (is.numeric(highlight_idx)) {
+    idx <- unique(highlight_idx[highlight_idx >= 1 & highlight_idx <= length(lvl)])
+    want <- lvl[idx]
+  } else if (is.character(highlight_idx)) {
+    want <- intersect(highlight_idx, lvl)
+  } else {
+    want <- character(0)
+  }
+  if (length(want)) d$is_highlight <- as.character(d$predictor) %in% want
+
+  # x-axis labels
+  xlabs <- if (!is.null(predictor_labels)) {
+    lab <- predictor_labels[as.character(levels(d$predictor))]
+    lab[is.na(lab)] <- as.character(levels(d$predictor))[is.na(lab)]
+    lab
+  } else {
+    levels(d$predictor)
+  }
+
+  # legend visibility
+  present_outcomes <- as.character(unique(d$Outcome))
+  legend_on <- if (is.null(show_legend)) length(present_outcomes) > 1 else isTRUE(show_legend)
+
+  # thresholds styling
+  if (is.null(threshold_colors)) {
+    threshold_colors <- rep("firebrick", length(thresholds))
+  } else if (length(threshold_colors) == 1L && length(thresholds) > 1L) {
+    threshold_colors <- rep(threshold_colors, length(thresholds))
+  }
+
+  # ----- plot (smart single vs multi-outcome)
+  pd    <- ggplot2::position_dodge(width = dodge_width)
+  sep_x <- seq(0.5, length(levels(d$predictor)) - 0.5, by = 1)
+  n_outcomes <- length(unique(d$Outcome))
+
+  if (n_outcomes == 1L) {
+    # ONE HUE: highlight_fill for all bars; fade non-highlights via alpha
+    p <- ggplot2::ggplot(
+      d, ggplot2::aes(x = .data$predictor, y = .data$pDelta, alpha = .data$is_highlight)
+    ) +
+      ggplot2::geom_vline(xintercept = sep_x, color = "grey92", linewidth = 0.4) +
+      ggplot2::geom_col(
+        position = pd, width = bar_width, color = "white", linewidth = 0.2,
+        fill = highlight_fill
+      ) +
+      ggplot2::scale_alpha_manual(values = c(`FALSE` = nonhighlight_alpha, `TRUE` = 1), guide = "none") +
+      ggplot2::labs(x = NULL, y = "PIP") +
+      ggplot2::scale_x_discrete(labels = xlabs) +
+      ggplot2::theme_minimal(base_size = base_size) +
+      ggplot2::theme(
+        legend.position = "none",
+        axis.text.x = ggplot2::element_text(angle = 60, hjust = 1),
+        axis.ticks.x = ggplot2::element_line(color = "grey50"),
+        axis.ticks.length.x = grid::unit(3, "pt"),
+        panel.grid.major.x = ggplot2::element_blank(),
+        panel.background   = ggplot2::element_rect(fill = "white", color = NA),
+        plot.background    = ggplot2::element_rect(fill = "white", color = NA)
+      ) +
+      ggplot2::coord_cartesian(ylim = c(-0.12, max(1, max(d$pDelta, na.rm = TRUE))), clip = "off")
+
+  } else {
+    # MULTI-HUE: hue by Outcome; fade non-highlights via alpha
+    p <- ggplot2::ggplot(
+      d, ggplot2::aes(x = .data$predictor, y = .data$pDelta,
+                      fill = .data$Outcome, alpha = .data$is_highlight)
+    ) +
+      ggplot2::geom_vline(xintercept = sep_x, color = "grey92", linewidth = 0.4) +
+      ggplot2::geom_col(position = pd, width = bar_width, color = "white", linewidth = 0.2) +
+      ggplot2::scale_alpha_manual(values = c(`FALSE` = nonhighlight_alpha, `TRUE` = 1), guide = "none") +
+      ggplot2::labs(x = NULL, y = "PIP", fill = legend_title) +
+      ggplot2::scale_x_discrete(labels = xlabs) +
+      ggplot2::theme_minimal(base_size = base_size) +
+      ggplot2::theme(
+        legend.position = if (legend_on) "bottom" else "none",
+        legend.box = "horizontal",
+        axis.text.x = ggplot2::element_text(angle = 60, hjust = 1),
+        axis.ticks.x = ggplot2::element_line(color = "grey50"),
+        axis.ticks.length.x = grid::unit(3, "pt"),
+        panel.grid.major.x = ggplot2::element_blank(),
+        panel.background   = ggplot2::element_rect(fill = "white", color = NA),
+        plot.background    = ggplot2::element_rect(fill = "white", color = NA),
+        legend.background  = ggplot2::element_rect(fill = "white", color = NA),
+        legend.box.background = ggplot2::element_rect(fill = "white", color = NA)
+      ) +
+      ggplot2::coord_cartesian(ylim = c(-0.12, max(1, max(d$pDelta, na.rm = TRUE))), clip = "off")
+
+    # (optional) custom colors per outcome if you pass `colors`
+    if (!is.null(colors)) {
+      pal <- colors
+      pres <- unique(d$Outcome)
+      if (is.null(names(pal)) && length(pal) == length(pres))
+        pal <- stats::setNames(pal, pres)
+      pal <- pal[names(pal) %in% pres]
+      if (length(pal)) p <- p + ggplot2::scale_fill_manual(values = pal, drop = FALSE, name = legend_title)
+    }
+  }
+
+  # thresholds (same as before)
+  if (length(thresholds)) {
+    if (is.null(threshold_colors)) threshold_colors <- rep("firebrick", length(thresholds))
+    if (length(threshold_colors) == 1L && length(thresholds) > 1L)
+      threshold_colors <- rep(threshold_colors, length(thresholds))
+    for (i in seq_along(thresholds)) {
+      p <- p + ggplot2::geom_hline(yintercept = thresholds[i],
+                                   linetype = "dashed",
+                                   color = threshold_colors[i],
+                                   linewidth = 0.6)
+    }
+  }
+
+  # group brackets last
+  if (use_groups && !is.null(group_map)) {
+    p <- add_group_brackets_scaled_(p, d, text_size = bracket_text_size)
+  }
+
+
+  # optional thin outline so highlights pop a touch more
+  if (any(d$is_highlight)) {
+    p <- p + ggplot2::geom_col(
+      data = d[d$is_highlight, , drop = FALSE],
+      ggplot2::aes(x = .data$predictor, y = .data$pDelta),
+      inherit.aes = FALSE,
+      position = pd, width = bar_width,
+      fill = NA, color = "black", linewidth = 0.25
+    )
+  }
+  # repaint highlighted bars with a specific fill (on top of outcome colors)
+  if (any(d$is_highlight)) {
+    p <- p + ggplot2::geom_col(
+      data = d[d$is_highlight, , drop = FALSE],
+      ggplot2::aes(x = .data$predictor, y = .data$pDelta),
+      inherit.aes = FALSE,
+      position = pd, width = bar_width,
+      fill = highlight_fill,           # <--- your chosen highlight fill
+      color = "white", linewidth = 0.2
+    )
+  }
+
+
+  # group brackets last
+  if (use_groups && !is.null(group_map)) {
+    p <- add_group_brackets_scaled_(p, d, text_size = bracket_text_size)
+  }
+
+  list(plot = p, data = d)
+}
+
+# internal helper: add group brackets using scaled y placement
+add_group_brackets_scaled_ <- function(
+    p, data_df,
+    y_frac = 0.10, tick_frac = 0.04, text_frac = 0.15,
+    line_col = "grey35", line_size = 0.6, text_size = 4
+){
+  .data <- rlang::.data
+  ymax <- max(data_df$pDelta, na.rm = TRUE); if (!is.finite(ymax) || ymax <= 0) ymax <- 1
+  y_min  <- -y_frac  * ymax
+  tick_h <-  tick_frac * ymax
+  y_txt  <- -text_frac * ymax
+
+  df <- dplyr::distinct(data_df, .data$predictor, .data$group_lbl) |>
+    dplyr::arrange(.data$predictor) |>
+    dplyr::mutate(x = as.numeric(.data$predictor))
+
+  ranges <- df |>
+    dplyr::filter(!is.na(.data$group_lbl)) |>
+    dplyr::group_by(.data$group_lbl) |>
+    dplyr::summarise(xmin = min(.data$x), xmax = max(.data$x), .groups = "drop")
+
+  p +
+    ggplot2::geom_segment(
+      data = ranges,
+      ggplot2::aes(x = .data$xmin - 0.45, xend = .data$xmax + 0.45, y = y_min, yend = y_min),
+      inherit.aes = FALSE, linewidth = line_size, color = line_col
     ) +
     ggplot2::geom_segment(
       data = ranges,

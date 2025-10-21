@@ -27,7 +27,15 @@ VS_Standard <- function(K, y, NeighborhoodList, which.prior,niter, verbose, pop_
     A <- spdep::nb2mat(neighbor, style = "B")
     neighbor_count <- rowSums(A)  # M (diagonal matrix) neighbor count for each spatial unit (notation from Mutiso, Neelon 2022)
     D <- diag(neighbor_count)  # Create diagonal matrix... Degree Matrix
-    Q <- D - A     # CAR precisson matrix
+    Q <- D - A     # CAR precision matrix
+
+
+    #spatial parameter inits
+    phi_init <- c(spam::rmvnorm(1, sigma=diag(.01, nspace)))	          # Random effects
+    phi <- phi_init-mean(phi_init) # centered phi
+    s2phi <- var(phi)              # var phi
+    sphi <- sqrt(s2phi)            # std phi
+    tauphi <- 1/s2phi              # precision of phi
   }
 
   # MCMC features
@@ -38,11 +46,12 @@ VS_Standard <- function(K, y, NeighborhoodList, which.prior,niter, verbose, pop_
   # Storage objects
   Beta <- matrix(0,lastit,p)              # store betas
   Delta <- pDelta<-matrix(0,lastit,p)     # store SS inclusion indicator and probability of inclusion
-  Lambda <- matrix(0,lastit,p)            # store local shrinkage parameters
+  Lambda <- matrix(0,lastit,p-1)            # store local shrinkage parameters
   Tau2 <- matrix(0,lastit,1)                # store global shrinkage parameter
   R <- matrix(0,lastit,1)                 # store over-dispersion parameter
   Sphi.sq <- matrix(0,lastit,1)           # store variance of spatial random effect, phi
-  phi.mat <- matrix(0,lastit,nspace)     # store spatial random effect
+  phi.mat <- matrix(0,lastit,length(y))     # store spatial random effect
+
 
   # Initialize
   beta <- rep(0, p)
@@ -52,7 +61,7 @@ VS_Standard <- function(K, y, NeighborhoodList, which.prior,niter, verbose, pop_
   tau2 = 0.1
   del1 <- 1
   del2 <- 1                  # lambda hyper parameters
-  nugget <- 0.05              # small diagonal element to be added to the covariance
+  nugget <- 0.1              # small diagonal element to be added to the covariance
   T0 <- 0.1                # prior on features
   s <- 0.01
   epsilon<-1
@@ -70,12 +79,6 @@ VS_Standard <- function(K, y, NeighborhoodList, which.prior,niter, verbose, pop_
   V <- 5                    # slab variance
   psi.Q <- V*(psi.nu - 1)
 
-  #spatial parameter inits
-  phi_init <- c(spam::rmvnorm(1, sigma=diag(.01, nspace)))	          # Random effects
-  phi <- phi_init-mean(phi_init) # centered phi
-  s2phi <- var(phi)              # var phi
-  sphi <- sqrt(s2phi)            # std phi
-  tauphi <- 1/s2phi              # precision of phi
 
   l <- rep(0, N)      # latent vector for CRT-based update of r
   a <- b <- 0.01      # Gamma hyperparms for r for CRT
@@ -226,7 +229,8 @@ VS_Standard <- function(K, y, NeighborhoodList, which.prior,niter, verbose, pop_
       yc <- sqrt(w)*z                                    # adjusting z by Polya weights w, recall that we had the term: (z - K beta)^T diag(w) (z - K beta) inside the exponent,
       # these weight adjustments simplifies it as  (yc - Xsel beta)^T  (yc - Xsel beta), getting rid of the diag(w), note that Xsel is
       # just a transformed version of K, to be specific, a few columns of K for which beta_j's are non-zero
-      Sigma_inv <- invA0 + t(Xsel)%*%Xsel                            # posterior precision matrix
+      k_sel <- ncol(Xsel)
+      Sigma_inv <- invA0 + t(Xsel)%*%Xsel+ diag(nugget, k_sel, k_sel)                             # posterior precision matrix
       sim_beta <- spam::rmvnorm.canonical(1, (t(Xsel)%*%(yc)),       # simulated beta_j's (for only non-zero delta_j's)
                                           as.matrix(Sigma_inv))
       beta[index] <- sim_beta                                        # store the non-zero betas at appropriate indices
@@ -399,8 +403,8 @@ VS_Standard <- function(K, y, NeighborhoodList, which.prior,niter, verbose, pop_
       yc <- sqrt(w)*z                                    # adjusting z by Polya weights w, recall that we had the term: (z - K beta)^T diag(w) (z - K beta) inside the exponent,
       # these weight adjustments simplifies it as  (yc - Xsel beta)^T  (yc - Xsel beta), getting rid of the diag(w), note that Xsel is
       # just a transformed version of K, to be specific, a few columns of K for which beta_j's are non-zero
-
-      Sigma_inv <- invA0 + t(Xsel)%*%Xsel                            # posterior precision matrix
+      k_sel <- ncol(Xsel)
+      Sigma_inv <- invA0 + t(Xsel)%*%Xsel+ diag(nugget, k_sel, k_sel)                             # posterior precision matrix
       sim_beta <- spam::rmvnorm.canonical(1, (t(Xsel)%*%(yc)),       # simulated beta_j's (for only non-zero delta_j's)
                                           as.matrix(Sigma_inv))
       beta[index] <- sim_beta                                        # store the non-zero betas at appropriate indices

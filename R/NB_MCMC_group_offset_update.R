@@ -9,11 +9,13 @@
 #' @param verbose is TRUE or FALSE, to show or suppress progression updates
 #' @param pop_col is a vector of the population of each spatial unit for the model offset, if modeling with space
 #' @param scale is an integer of the desired scale for outcome rates (e.g 100000 for per 100,000 rates)
-
+#' @param pi_star is the prior probability of there being any active feature in a group (when grouping features and using spike and slab)
+#' @param alpha0 is the concentration parameter for the Beta hyper parameter for variable inclusion probability for (when grouping features and using spike and slab). Lower values allow for more uncertainty and flexibility.
+#'
 #' @return It returns the estimated beta's, r, shrinkage parameters, phi, Delta and pDelta (if applicable )
 #' @export
 
-VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, niter, verbose, pop_col, scale){
+VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, niter, verbose, pop_col, scale, pi_star, alpha0){
 
   # currently all algorithms update r with Chinese restaurant table (CRT) and have a burn-in of half
 
@@ -25,6 +27,8 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
   cumulative_M <- cumsum(Mg)
   scale <- as.numeric(scale)
   which.prior <- which.prior
+
+  is.singleton <- Mg==1 #identify groups of size 1
 
   p = ncol(K)               #includes intercept
   if (sum(Mg) != (p - 1)) {
@@ -44,7 +48,14 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
     A <- spdep::nb2mat(neighbor, style = "B")
     neighbor_count <- rowSums(A)  # M (diagonal matrix) neighbor count for each spatial unit (notation from Mutiso, Neelon 2022)
     D <- diag(neighbor_count)  # Create diagonal matrix... Degree Matrix
-    Q <- D - A     # CAR precisson matrix
+    Q <- D - A     # CAR precision matrix
+
+    #spatial parameter inits
+    phi_init <- c(spam::rmvnorm(1, sigma=diag(.01, nspace)))	          # Random effects
+    phi <- phi_init-mean(phi_init) # centered phi
+    s2phi <- var(phi)              # var phi
+    sphi <- sqrt(s2phi)            # std phi
+    tauphi <- 1/s2phi              # precision of phi
   }
 
   # Storage objects
@@ -55,13 +66,20 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
   Zeta2<-matrix(0,lastit,1)               # store global-global shrinkage parameters
   R <- matrix(0,lastit,1)                 # store over-dispersion parameter
   Sphi.sq <- matrix(0,lastit,1)           # store variance of spatial random effect, phi
-  phi.mat <- matrix(0,lastit,nspace)     # store spatial random effect
+  phi.mat <- matrix(0,lastit,length(y))     # store spatial random effect
 
   # Initialize
   beta <- rep(0, p)
   tau <- rep(0.1, p)
   r <- 1
   adjLambda2 <- Lambda2 <- rep(0.1, p-1)
+  for (i in 1:(p - 1)) {
+    if (is.singleton[group_ind[i]]) {
+      Lambda2[i] <- 1
+      adjLambda2[i]<- 1
+    }
+  }
+
   a_eta<-eta2<-rep(0.1, p-1)
   gamma <- rep(0.1, p-1)
   tau2 <- rep(0.1, G)
@@ -69,15 +87,20 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
   lambda2 <- 5
   del1<-1
   del2<-1                  # lambda hyper parameters
-  nugget<-0.05
+  nugget<-0.1              # small diagonal element to be added to the covariance
   T0<-0.1                 # prior on features
   s<-0.01
   epsilon<-1
   c2<-1
   c2v<-4
   c2s<-2
-  wa0<-1
-  wb0<-1
+
+  pi_star <- pi_star                          # prior Probability(any active in group)
+  alpha0  <- alpha0
+  w_star  <- 1 - (1 - pi_star)^(1 / Mg)    # per-variable prior centered by group size
+  wa0_g   <- alpha0 * w_star
+  wb0_g   <- alpha0 * (1 - w_star)
+
   delta <- pdelta <- c(1, rep(0, p-1))
   lambda0 <- rep(1, p)
   a.p0 <- 1
@@ -94,12 +117,6 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
   zeta2 <- 1
   xi <- 1
 
-  #spatial parameter inits
-  phi_init <- c(spam::rmvnorm(1, sigma=diag(.01, nspace)))	          # Random effects
-  phi <- phi_init-mean(phi_init) # centered phi
-  s2phi <- var(phi)              # var phi
-  sphi <- sqrt(s2phi)            # std phi
-  tauphi <- 1/s2phi              # precision of phi
 
   l <- rep(0, N)      # latent vector for CRT-based update of r
   a <- b <- 0.01      # Gamma hyperparms for r for CRT
@@ -153,31 +170,31 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
       ## Algorithm 5th step: update shrinkage parameters ----
       #============================================================================#
       summand_vec <- NULL
-      for(g in 1:G) {
-        for(j in 1:Mg[g]) {
-          if(g > 1){                                                    # g = 1 corresponds to the first group, cumulative_M captures M1, M1+ M2, M1+M2+M3,...
-            Lambda2[j + cumulative_M[g - 1]] <- MCMCpack::rinvgamma(1, 1, scale =
-                                                                      1/gamma[j + cumulative_M[g - 1]] + beta_cov[j + cumulative_M[g - 1]]^2/2/tau2[g]/zeta2)
-            gamma[j + cumulative_M[g - 1]] <- MCMCpack::rinvgamma(1, 1,
-                                                                  scale = 1 + 1/Lambda2[j + cumulative_M[g - 1]])
-          }else{
-            Lambda2[j] <- MCMCpack::rinvgamma(1, 1, scale =               # the if else statement could potentially be merged if you define cumulative_M to store 0 as well, i.e., 0, M1, M1 + M2,...
-                                                1/ gamma[j + Mg[1]] + beta_cov[j]^2/tau2[1]/zeta2/2)
-            gamma[j] <- MCMCpack::rinvgamma(1, 1, scale =  1 + 1/Lambda2[j])
+
+      for (g in 1:G) {
+        if (is.singleton[g]) {
+          # Singleton group: no lambda_gk or gamma updates
+          j_idx <- if (g > 1) (cumulative_M[g - 1] + 1):cumulative_M[g] else 1:Mg[1]
+          summand <- sum(beta_cov[j_idx]^2)  # no Lambda2
+        } else {
+          # Non-singleton group: full update
+          for (j in 1:Mg[g]) {
+            idx <- if (g > 1) j + cumulative_M[g - 1] else j
+            Lambda2[idx] <- MCMCpack::rinvgamma(1, 1, scale =
+                                                  1 / gamma[idx] + beta_cov[idx]^2 / (2 * tau2[g] * zeta2))
+            gamma[idx] <- MCMCpack::rinvgamma(1, 1, scale = 1 + 1 / Lambda2[idx])
           }
+          j_idx <- if (g > 1) (cumulative_M[g - 1] + 1):cumulative_M[g] else 1:Mg[1]
+          summand <- sum(beta_cov[j_idx]^2 / Lambda2[j_idx])
         }
-        if(g > 1) {
-          summand <- sum(beta_cov[(cumulative_M[g - 1] + 1):cumulative_M[g]]^2/      # carefully note which sum_j beta_j^2's are being used in each case
-                           Lambda2[(cumulative_M[g - 1] + 1):cumulative_M[g]])
-        }else{
-          summand <- sum(beta_cov[1:Mg[1]]^2/Lambda2[1:Mg[1]])
-        }
+
         summand_vec <- c(summand_vec, summand)
-        tau2[g] <- MCMCpack::rinvgamma(1, (Mg[g] + 1)/2, scale = 1/epsilon + summand/zeta2/2)
+        tau2[g] <- MCMCpack::rinvgamma(1, (Mg[g] + 1) / 2, scale = 1 / epsilon[g] + summand / (2 * zeta2))
         tau2[g] <- ifelse(tau2[g] > exp(5), exp(5),
-                          ifelse(tau2[g] < exp(-5), exp(-5), tau2[g]))    #thresholding
-        epsilon[g] <- MCMCpack::rinvgamma(1, 1, scale = 1 + 1/tau2[g])
+                          ifelse(tau2[g] < exp(-5), exp(-5), tau2[g]))
+        epsilon[g] <- MCMCpack::rinvgamma(1, 1, scale = 1 + 1 / tau2[g])
       }
+
       zeta2 <- MCMCpack::rinvgamma(1, p/2,                           # all sum_j beta_j^2 is being used for Zeta update
                                    scale = 1/xi + sum(summand_vec/tau2)/2)
       zeta2 <- ifelse(zeta2 > exp(5), exp(5),
@@ -265,7 +282,7 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
           delta_sub <- delta[(cumulative_M[g - 1] + 2):(cumulative_M[g] + 1)]
         }
         incfix <- c(incfix, sum(delta_sub == 1))                         # how many delta_j's are nonzero at this iteration, first element is always 1 as it corresponds to the intercept
-        omega[g]  <- rbeta(1, wa0 + incfix[g], wb0 + Mg[g] - incfix[g])               # mixture weight from Eq. 9, page 56 from Dvorzak
+        omega[g]  <- rbeta(1, wa0_g[g] + incfix[g], wb0_g[g] + Mg[g] - incfix[g])               # mixture weight from Eq. 9, page 56 from Dvorzak
       }
 
       invA0 <- diag(c(T0, 1/psi), nrow = p)            # diagonal precision matrix with first element being fixed as it corresponds the intercept
@@ -283,7 +300,7 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
       # just a transformed version of K, to be specific, a few columns of K for which beta_j's are non-zero
 
       k_sel <- ncol(Xsel)
-      Sigma_inv <- invA0 + t(Xsel)%*%Xsel                            # posterior precision matrix
+      Sigma_inv <- invA0 + t(Xsel)%*%Xsel + diag(nugget, k_sel, k_sel)                             # posterior precision matrix
       sim_beta <- spam::rmvnorm.canonical(1, (t(Xsel)%*%(yc)),       # simulated beta_j's (for only non-zero delta_j's)
                                           as.matrix(Sigma_inv))
       beta[index] <- sim_beta                                        # store the non-zero betas at appropriate indices
@@ -303,10 +320,12 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
           summand <- sum(beta_cov[1:Mg[1]]^2)
         }
         summand_vec <- c(summand_vec, summand)
-        tau2[g] <- MCMCpack::rinvgamma(1, (Mstar[g] + 1)/2, scale = 1/epsilon + summand/zeta2/2)
+        if(is.singleton[g]){
+          tau2[g] <- 1
+        }else{ tau2[g] <- MCMCpack::rinvgamma(1, (Mstar[g] + 1)/2, scale = 1/epsilon + summand/zeta2/2)
         tau2[g] <- ifelse(tau2[g] > exp(5), exp(5),
                           ifelse(tau2[g] < exp(-5), exp(-5), tau2[g]))    #thresholding
-        epsilon[g] <- MCMCpack::rinvgamma(1, 1, scale = 1 + 1/tau2[g])
+        epsilon[g] <- MCMCpack::rinvgamma(1, 1, scale = 1 + 1/tau2[g])}
       }
       zeta2 <- MCMCpack::rinvgamma(1, sum(Mstar)/2,
                                    scale = 1/xi + sum(summand_vec/tau2)/2)
@@ -317,7 +336,7 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
 
 
       #============================================================================#
-      ## Algorithm 7th step: update phi (icar prior) ----
+      ## Algorithm 6th step: update phi (icar prior) ----
       #============================================================================#
       priorprec<-1/(sphi^2)*Q                    # Prior precision of phi1
       priormean<- 0
@@ -385,7 +404,7 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
       #============================================================================#
       # based on priors, first coefficient i.e., intercept is ignored from penalization
       K_w <- sqrt(w)*K
-      Sigma_inv <- diag(c(T0, 1/Lambda2/rep(tau2, times = Mg)/zeta2)) + crossprod(K_w) + diag(nugget, p)   # notice the rep command
+      Sigma_inv <- diag(c(T0, 1/Lambda2/rep(tau2, times = Mg)/zeta2)) + crossprod(K_w) + diag(nugget, p)
       M <- t(K_w)%*%(sqrt(w)*z)
       beta <- c(spam::rmvnorm.canonical(1, M, as.matrix(Sigma_inv)))
       beta_cov <- beta[-1]
@@ -395,31 +414,31 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
       ## Algorithm 5th step: update shrinkage parameters ----
       #============================================================================#
       summand_vec <- NULL
-      for(g in 1:G) {
-        for(j in 1:Mg[g]) {
-          if(g > 1){                                                    # g = 1 corresponds to the first group, cumulative_M captures M1, M1+ M2, M1+M2+M3,...
-            Lambda2[j + cumulative_M[g - 1]] <- MCMCpack::rinvgamma(1, 1, scale =
-                                                                      1/gamma[j + cumulative_M[g - 1]] + beta_cov[j + cumulative_M[g - 1]]^2/2/tau2[g]/zeta2)
-            gamma[j + cumulative_M[g - 1]] <- MCMCpack::rinvgamma(1, 1,
-                                                                  scale = 1 + 1/Lambda2[j + cumulative_M[g - 1]])
-          }else{
-            Lambda2[j] <- MCMCpack::rinvgamma(1, 1, scale =               # the if else statement could potentially be merged if you define cumulative_M to store 0 as well, i.e., 0, M1, M1 + M2,...
-                                                1/ gamma[j + Mg[1]] + beta_cov[j]^2/tau2[1]/zeta2/2)
-            gamma[j] <- MCMCpack::rinvgamma(1, 1, scale =  1 + 1/Lambda2[j])
+
+      for (g in 1:G) {
+        if (is.singleton[g]) {
+          # Singleton group: no lambda_gk or gamma updates
+          j_idx <- if (g > 1) (cumulative_M[g - 1] + 1):cumulative_M[g] else 1:Mg[1]
+          summand <- sum(beta_cov[j_idx]^2)  # no Lambda2
+        } else {
+          # Non-singleton group: full update
+          for (j in 1:Mg[g]) {
+            idx <- if (g > 1) j + cumulative_M[g - 1] else j
+            Lambda2[idx] <- MCMCpack::rinvgamma(1, 1, scale =
+                                                  1 / gamma[idx] + beta_cov[idx]^2 / (2 * tau2[g] * zeta2))
+            gamma[idx] <- MCMCpack::rinvgamma(1, 1, scale = 1 + 1 / Lambda2[idx])
           }
+          j_idx <- if (g > 1) (cumulative_M[g - 1] + 1):cumulative_M[g] else 1:Mg[1]
+          summand <- sum(beta_cov[j_idx]^2 / Lambda2[j_idx])
         }
-        if(g > 1) {
-          summand <- sum(beta_cov[(cumulative_M[g - 1] + 1):cumulative_M[g]]^2/      # carefully note which sum_j beta_j^2's are being used in each case
-                           Lambda2[(cumulative_M[g - 1] + 1):cumulative_M[g]])
-        }else{
-          summand <- sum(beta_cov[1:Mg[1]]^2/Lambda2[1:Mg[1]])
-        }
+
         summand_vec <- c(summand_vec, summand)
-        tau2[g] <- MCMCpack::rinvgamma(1, (Mg[g] + 1)/2, scale = 1/epsilon + summand/zeta2/2)
+        tau2[g] <- MCMCpack::rinvgamma(1, (Mg[g] + 1) / 2, scale = 1 / epsilon[g] + summand / (2 * zeta2))
         tau2[g] <- ifelse(tau2[g] > exp(5), exp(5),
-                          ifelse(tau2[g] < exp(-5), exp(-5), tau2[g]))    #thresholding
-        epsilon[g] <- MCMCpack::rinvgamma(1, 1, scale = 1 + 1/tau2[g])
+                          ifelse(tau2[g] < exp(-5), exp(-5), tau2[g]))
+        epsilon[g] <- MCMCpack::rinvgamma(1, 1, scale = 1 + 1 / tau2[g])
       }
+
       zeta2 <- MCMCpack::rinvgamma(1, p/2,                           # all sum_j beta_j^2 is being used for Zeta update
                                    scale = 1/xi + sum(summand_vec/tau2)/2)
       zeta2 <- ifelse(zeta2 > exp(5), exp(5),
@@ -490,7 +509,7 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
           delta_sub <- delta[(cumulative_M[g - 1] + 2):(cumulative_M[g] + 1)]
         }
         incfix <- c(incfix, sum(delta_sub == 1))                         # how many delta_j's are nonzero at this iteration, first element is always 1 as it corresponds to the intercept
-        omega[g]  <- rbeta(1, wa0 + incfix[g], wb0 + Mg[g] - incfix[g])               # mixture weight from Eq. 9, page 56 from Dvorzak
+        omega[g]  <- rbeta(1, wa0_g[g] + incfix[g], wb0_g[g] + Mg[g] - incfix[g])               # mixture weight from Eq. 9, page 56 from Dvorzak
       }
 
       invA0 <- diag(c(T0, 1/psi), nrow = p)            # diagonal precision matrix with first element being fixed as it corresponds the intercept
@@ -528,10 +547,12 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
           summand <- sum(beta_cov[1:Mg[1]]^2)
         }
         summand_vec <- c(summand_vec, summand)
-        tau2[g] <- MCMCpack::rinvgamma(1, (Mstar[g] + 1)/2, scale = 1/epsilon + summand/zeta2/2)
+        if(is.singleton[g]){
+          tau2[g] <- 1
+        }else{ tau2[g] <- MCMCpack::rinvgamma(1, (Mstar[g] + 1)/2, scale = 1/epsilon + summand/zeta2/2)
         tau2[g] <- ifelse(tau2[g] > exp(5), exp(5),
                           ifelse(tau2[g] < exp(-5), exp(-5), tau2[g]))    #thresholding
-        epsilon[g] <- MCMCpack::rinvgamma(1, 1, scale = 1 + 1/tau2[g])
+        epsilon[g] <- MCMCpack::rinvgamma(1, 1, scale = 1 + 1/tau2[g])}
       }
       zeta2 <- MCMCpack::rinvgamma(1, sum(Mstar)/2,
                                    scale = 1/xi + sum(summand_vec/tau2)/2)

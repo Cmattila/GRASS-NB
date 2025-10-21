@@ -9,6 +9,8 @@
 #' @param verbose is TRUE or FALSE, to show or suppress progression updates
 #' @param pop_col is a vector of the population of each spatial unit for the model offset, if modeling with space
 #' @param scale is an integer of the desired scale for outcome rates (e.g 100000 for per 100,000 rates)
+#' @param pi_star is the prior probability of there being any active feature in a group (when grouping features and using spike and slab)
+#' @param alpha0 is the concentration parameter for the Beta hyper parameter for variable inclusion probability (when grouping features and using spike and slab). Lower values allow for more uncertainty and flexibility.
 
 #' @importFrom stats var rbinom rgamma rbeta runif
 
@@ -17,7 +19,7 @@
 
 
 MUSC <- function(X, y, group_ind = NULL, NeighborhoodList = NULL, which.prior = c("HS", "SS"), niter=10000,
-                 verbose = "TRUE", pop_col = NULL, scale = NULL){
+                 verbose = "TRUE", pop_col = NULL, scale = NULL, pi_star = 0.2, alpha0 = 10){
 
   # --- normalize ---
   y <- if (is.matrix(y)) as.numeric(y[,1]) else as.numeric(y)
@@ -49,7 +51,7 @@ MUSC <- function(X, y, group_ind = NULL, NeighborhoodList = NULL, which.prior = 
   if (!is.null(group_ind) && length(group_ind) != ncol(X)) stop("Length of group_ind and number of columns of X do not match.")
 
   # class check for NeighborhoodList
-  if (!inherits(NeighborhoodList, "nb")) {
+  if (!is.null(NeighborhoodList) & !inherits(NeighborhoodList, "nb")) {
     stop("'NeighborhoodList' must be an object of class 'nb' (e.g., from spdep::poly2nb).")
   }
 
@@ -87,7 +89,8 @@ MUSC <- function(X, y, group_ind = NULL, NeighborhoodList = NULL, which.prior = 
       NeighborhoodList = NeighborhoodList,
       which.prior = which.prior,
       niter = niter, verbose = verbose,
-      pop_col = pop_col, scale = scale
+      pop_col = pop_col, scale = scale,
+      pi_star = pi_star, alpha0 = alpha0
     )
   }else { # group update w/ offset
     fitted_model <- VS_Group_offset(
@@ -95,7 +98,8 @@ MUSC <- function(X, y, group_ind = NULL, NeighborhoodList = NULL, which.prior = 
       NeighborhoodList = NeighborhoodList,
       which.prior = which.prior,
       niter = niter, verbose = verbose,
-      pop_col = pop_col, scale = scale
+      pop_col = pop_col, scale = scale,
+      pi_star = pi_star, alpha0 = alpha0
     )
   }
 

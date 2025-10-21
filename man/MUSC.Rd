@@ -13,7 +13,9 @@ MUSC(
   niter = 10000,
   verbose = "TRUE",
   pop_col = NULL,
-  scale = NULL
+  scale = NULL,
+  pi_star = 0.2,
+  alpha0 = 10
 )
 }
 \arguments{
@@ -34,6 +36,10 @@ MUSC(
 \item{pop_col}{is a vector of the population of each spatial unit for the model offset, if modeling with space}
 
 \item{scale}{is an integer of the desired scale for outcome rates (e.g 100000 for per 100,000 rates)}
+
+\item{pi_star}{is the prior probability of there being any active feature in a group (when grouping features and using spike and slab)}
+
+\item{alpha0}{is the concentration parameter for the Beta hyper parameter for variable inclusion probability (when grouping features and using spike and slab). Lower values allow for more uncertainty and flexibility.}
 }
 \value{
 It returns the estimated beta's, r, shrinkage parameters, phi, Delta and pDelta (if applicable )

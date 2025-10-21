@@ -24,17 +24,18 @@ plot_pdelta_bars_mcmc(
   bar_width = 0.75,
   dodge_width = 0.8,
   base_size = 22,
-  verbose = TRUE
+  verbose = TRUE,
+  bracket_text_size = 4.5
 )
 }
 \arguments{
 \item{predictors}{Character vector of predictor keys (defines x-axis order/inclusion).}
 
-\item{pdelta_mat}{Optional numeric matrix (iterations × predictors) for a single outcome.}
+\item{pdelta_mat}{Optional numeric matrix (iterations x predictors) for a single outcome.}
 
 \item{outcome_name}{Optional single character label for \code{pdelta_mat} (required if \code{pdelta_mat} is used).}
 
-\item{pdelta_list}{Optional \strong{named list} of numeric matrices (iterations × predictors), one per outcome.
+\item{pdelta_list}{Optional \strong{named list} of numeric matrices (iterations x predictors), one per outcome.
 List names are used as outcome labels. If provided, \code{pdelta_mat}/\code{outcome_name} are ignored.}
 
 \item{outcomes}{Optional character vector to subset outcomes (must match names in \code{pdelta_list}
@@ -73,6 +74,8 @@ mapping pretty outcome names -> colors.}
 \item{base_size}{Base font size for theme (default 22).}
 
 \item{verbose}{Logical; print brief diagnostics (default TRUE).}
+
+\item{bracket_text_size}{Font size for the group names (default 4.5, different scale then base_size)}
 }
 \value{
 A list with \item{plot}{ggplot object} and \item{data}{data.frame used for plotting}.
@@ -80,7 +83,8 @@ A list with \item{plot}{ggplot object} and \item{data}{data.frame used for plott
 \description{
 Plot Posterior Inclusion Probabilities (PIPs) per predictor, across one or more
 outcomes, computed as column means of MCMC indicator matrices. Supply either:
-(i) a single matrix \code{pdelta_mat} (iterations × predictors) with an \code{outcome_name},
+(i) a single matrix \code{pdelta_mat} (iterations x predictors) with an \code{outcome_name},
+(i) a single matrix \code{pdelta_mat} (iterations x predictors) with an \code{outcome_name},
 or (ii) a named list \code{pdelta_list} of such matrices (one per outcome).
 The argument \code{predictors} fixes x-axis order and inclusion.
 }
@@ -107,7 +111,8 @@ res2 <- plot_pdelta_bars_mcmc(
   predictors       = predictors,
   pdelta_list      = pdelta_list,
   predictor_labels = setNames(toupper(predictors), predictors),
-  group_map        = c(x1="Demog", x2="Demog", x3="Behavior", x4="Behavior", x5="Access", x6="Access"),
+  group_map = c(x1="Demog", x2="Demog", x3="Behavior",
+  x4="Behavior", x5="Access", x6="Access"),
   group_levels     = c("Demog","Behavior","Access"),
   thresholds       = c(0.5, 0.9),
   legend_title     = "Cancer"
