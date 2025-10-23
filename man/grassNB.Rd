@@ -2,7 +2,7 @@
 % Please edit documentation in R/grassNB_main.R
 \name{grassNB}
 \alias{grassNB}
-\title{Main parent function for fitting different models}
+\title{@title Main parent function for GRASS-NB}
 \usage{
 grassNB(
   X,
@@ -45,5 +45,5 @@ grassNB(
 It returns the estimated beta's, r, shrinkage parameters, phi, Delta and pDelta (if applicable )
 }
 \description{
-Main parent function for fitting different models
+Bayesian variable selection in spatially indexed count data with flexible choices of priors
 }
