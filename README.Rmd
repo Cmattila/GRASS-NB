@@ -4,7 +4,7 @@ output: rmarkdown::github_document
 <table style="width:100%;">
   <tr>
     <td style="text-align:left; vertical-align:middle;">
-      <h1 style="margin:0;">MUSC</h1>
+      <h1 style="margin:0;">GRASS-NB</h1>
       <!-- <p style="margin:0.25rem 0 0;"> -->
       <!--   <strong>Authors:</strong> Chloe Mattila, Elizabeth Hill, Brian Neelon, and Souvik Seal -->
       <!-- </p> -->
@@ -12,7 +12,7 @@ output: rmarkdown::github_document
     <!-- <td style="text-align:right; width:1%; white-space:nowrap;"> -->
     <!--   <!-- invisible spacer: keeps layout, not visible --> -->
     <!--   <td style="text-align:right; padding-left:400px;"> -->
-    <!--   <img src="MUSC_logo_simple.png" width="140" height="150"/> -->
+    <!--   <img src="GrassNB_logo_simple.png" width="140" height="150"/> -->
     <!-- </td> -->
   </tr>
 </table>
@@ -27,21 +27,21 @@ knitr::opts_chunk$set(
   messages = FALSE,
   warnings = FALSE
 )
-library(MUSC)
+library(grassNB)
 stopifnot(requireNamespace("spam", quietly = TRUE))
 ```
 
-The *R* package implements the models proposed in the manuscript "MUSC: MUlti-level variable selection for Spatially indexed Count data." It enables Bayesian variable selection for regression of overdispersed negative binomial spatially indexed count data, with or without feature grouping. MUSC supports both standard priors, horseshoe and spike-and-slab, and their multi-level group extensions when feature grouping is applied. The package is broadly applicable to spatial datasets where the outcome is spatially indexed count data (e.g., state-level cancer incidence counts) and the predictors may be grouped into meaningful categories (e.g., population/SES, behavior, smoking).
+The *R* package implements the models proposed in the manuscript "GRASS-NB: Group-structured variable selection for spatial negative binomial data with application to cancer registry and spatial omics." It enables Bayesian variable selection for the regression of overdispersed negative binomial spatially indexed count data, with or without feature grouping. GRASS-NB supports both standard priors, horseshoe and spike-and-slab, and their multi-level group extensions when feature grouping is applied. The package is broadly applicable to spatial datasets where the outcome is spatially indexed count data (e.g., state-level cancer incidence counts or spatial omics) and the predictors may be grouped into meaningful categories (e.g., population/SES, behavior, smoking).
 
-## Install and load MUSC
+## Install and load GRASS-NB
 
-We install and load the developmental version of MUSC from GitHub. 
+We install and load the developmental version of GRASS-NB from GitHub. 
 
 ```{r loading packages, message=FALSE, warning=FALSE}
 
-# MUSC installation
-devtools::install_github('Cmattila/MUSC', quiet = TRUE, force = TRUE)
-library(MUSC)
+# grassNB installation
+devtools::install_github('Cmattila/GRASS-NB', quiet = TRUE, force = TRUE)
+library(grassNB)
 
 
 # # List of packages for Import
@@ -55,14 +55,13 @@ library(MUSC)
 
 ## Simulate mildly correlated feature data, $p=50$
 
-Then we simulate $(p-1)=199$ features with a within group correlation of $\rho=0.25$.  For each non-null coefficient $\beta_j$, the signal magnitude was independently drawn from Unif(0.5, 2); all remaining coefficients, intercept included, were set to zero.We set the group size to $M_g = 5$, yielding $G = ⌈(p − 1)/M_g$⌉ groups, with all groups of size five except one, which had four, with the thress selected groups under Case 2 where within a group some features are active and some are inactive, have three, three and four active features.
-
+Then we simulate $(p-1)=199$ features with a within group correlation of $\rho=0.25$.  For each non-null coefficient $\beta_j$, the signal magnitude was fixed at $\beta_j = 4$; all remaining coefficients, intercept included, were set to zero. We set the group size to $M_g = 5$, yielding $G = ⌈(p − 1)/M_g$⌉ groups, with all groups of size five except one, which had four. For Case 1, we set two full groups to be active (non-null).
 
 ```{r constructing feature matrix, out.width = "50%"}
 set.seed(2025*2025)
 N <- 100 # number of observations/ spatial units
 p_dim <- 50 # number of features (including features)
-signal_vec <- rep(2, 10)
+signal_vec <- rep(4, 10)
 
 Mg = 5 # group size
 G = p_dim/Mg # number of groups
@@ -98,7 +97,7 @@ n_mat100 <- spdep::nb2mat(nb100, style = "B") #b indicates binary 0/1
 Q100 <- diag(rowSums(n_mat100)) - n_mat100    #iCAR precision 
 
 ## Simulating phi, iCAR spatial random effects
-phi <- MUSC::phi_True_func(nu_vals=0.1, Q=Q100, n_space=100)
+phi <- grassNB::phi_True_func(nu_vals=0.1, Q=Q100, n_space=100)
 
 # plotting phi
 df <- data.frame(x = coords100$x,
@@ -126,18 +125,18 @@ set.seed(2025*2025)
 scale = 100000
 pop <- sample(10000:50000, N, TRUE)
  
-yy <- MUSC::y_gen_fun(N = N, r = 1, K = Features$K, beta_true = Features$beta_true, phi_true = phi$phi_nu_0.1, Scale = scale, pop_col = pop, offset = TRUE)
+yy <- grassNB::y_gen_fun(N = N, r = 1, K = Features$K, beta_true = Features$beta_true, phi_true = phi$phi_nu_0.1, Scale = scale, pop_col = pop, offset = TRUE)
 ```
 
 
 ## Fit the SS and HS grouped varible selection models
 
-The main function of "MUSC" fits negative binomial models using either the standard horseshoe prior (which.prior = "HS") or spike and slab prior (which.prior = "SS"), or their grouped extensions (specifying the vector of group indicators; *group_ind*). Additionally, these models can be specified to include a spatial random effect (specifying the neighborhood list, an object of class *nb*; *NeighborhoodList*). $X$ denotes the matrix of spatial-unit-level features (dimension $N\times p-1$). *niter* denotes the number of MCMC iterations.*pop_col* is the vector of the population for each spatial unit and *scale* is the desired scale for the rates (i.e. per 100,000).
+The main function of "grassNB" fits negative binomial models using either the standard horseshoe prior (which.prior = "HS") or spike and slab prior (which.prior = "SS"), or their grouped extensions (specifying the vector of group indicators; *group_ind*). Additionally, these models can be specified to include a spatial random effect (specifying the neighborhood list, an object of class *nb*; *NeighborhoodList*). $X$ denotes the matrix of spatial-unit-level features (dimension $N\times p-1$). *niter* denotes the number of MCMC iterations.*pop_col* is the vector of the population for each spatial unit and *scale* is the desired scale for the rates (i.e. per 100,000).
 
 ```{r fitting SS and HS grouped varible selection with offset and spatial random effect, out.width= "50%"}
 set.seed(2025*2025)
 
-SS_group_offset_space <- MUSC::MUSC(X = scale(Features$X),                 # feature matrix
+SS_group_offset_space <- grassNB::grassNB(X = scale(Features$X),                 # feature matrix
                               y = yy$y,                        # outcome vector
                               group_ind =  group_ind,         # group indicator vector
                               NeighborhoodList = nb100,       # Neighborhood list
@@ -145,14 +144,14 @@ SS_group_offset_space <- MUSC::MUSC(X = scale(Features$X),                 # fea
                               scale = scale,                  # rate scale
                               which.prior = "SS",             # method
                               niter = 10000,                  # MCMC iterations; use more in practice, brief here for speed
-                              verbose = FALSE,                 # not printing MCMC iteration progress
+                              verbose = TRUE,                 # printing MCMC iteration progress
                               pi_star = 0.1,                  # prior probability that any feature within a group is nonnull
                               alpha0 = 10)                    # concentration parameter for variable inclusion probability.
 
 print(str(SS_group_offset_space)) # check the returned list object
 
 
-HS_group_offset_space <- MUSC::MUSC(X = scale(Features$X),                 # feature matrix
+HS_group_offset_space <- grassNB::grassNB(X = scale(Features$X),                 # feature matrix
                               y = yy$y,                       # outcome vector
                               group_ind =  group_ind,         # group indicator vector
                               NeighborhoodList = nb100,       # Neighborhood list
@@ -160,7 +159,7 @@ HS_group_offset_space <- MUSC::MUSC(X = scale(Features$X),                 # fea
                               scale = scale,                  # rate scale
                               which.prior = "HS",             # method
                               niter = 10000,                  # MCMC iterations; use more in practice, brief here for speed
-                              verbose = FALSE)                # not printing MCMC iteration progress
+                              verbose = TRUE)                 # printing MCMC iteration progress
 
 print(str(HS_group_offset_space)) # check the returned list object
 
@@ -184,7 +183,7 @@ titles <- c(
 # Plot
 par(mfrow = c(2, 2), mar = c(3, 4, 2, 1), oma = c(0, 0, 2, 0))
 for (i in seq_along(ran_sam)) {
-  MUSC::MCMC_plot(
+  grassNB::MCMC_plot(
     HS_group_offset_space$Beta[, ran_sam[i]],
     main = titles[i]
   )
@@ -235,7 +234,7 @@ group_levels <- paste0( sort(unique(group_ind)))  # order under x-axis
 
 
 #plotting with truly nonnulls in a darker shade
-res_highlight<- MUSC::plot_pdelta_bars_mcmc_highlights(
+res_highlight<- grassNB::plot_pdelta_bars_mcmc_highlights(
   predictors        = predictors,
   pdelta_mat        = SS_group_offset_space$pDelta[,-1],      # iterations × (p-1) matrix, removing the intercept column 
   outcome_name      = "SS (group, spatial, offset)",    # whatever label you want in the legend
@@ -261,7 +260,7 @@ print(res_highlight$plot)
 Display the 95% ETI CrI of each beta for the HS based model. Within the plot, along the x-axis are the names of the features and above are their respective groups. Truly non-null features are shown in a deeper color.
 
 ```{r CrI-visualization, out.width= "100%"}
-inclusion <- MUSC::local_credible(HS_group_offset_space$Beta, local.p.ths = 0.95)  # 0/1 vector
+inclusion <- grassNB::local_credible(HS_group_offset_space$Beta, local.p.ths = 0.95)  # 0/1 vector
 tp <- sum(inclusion[nonNull_indices_p50_Case1]) # truly nonnulls detected 
 fn <- length(nonNull_indices_p50_Case1) - tp   # truly nonnulls not detected
 fp <- sum(inclusion[Null_indices_p50_Case1])    # truly null detected; nulls include intercept
@@ -301,7 +300,7 @@ group_levels <- paste0( sort(unique(group_ind)))  # order under x-axis
 
 
 #plotting with truly nonnulls in a darker shade
-res_HS_highlight <- MUSC::plot_cri_highlights(
+res_HS_highlight <- grassNB::plot_cri_highlights(
   outcomes = c("HS"),
   predictors = predictors,
   betas = list(

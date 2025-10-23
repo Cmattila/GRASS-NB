@@ -18,7 +18,7 @@
 #' @export
 
 
-MUSC <- function(X, y, group_ind = NULL, NeighborhoodList = NULL, which.prior = c("HS", "SS"), niter=10000,
+grassNB <- function(X, y, group_ind = NULL, NeighborhoodList = NULL, which.prior = c("HS", "SS"), niter=10000,
                  verbose = "TRUE", pop_col = NULL, scale = NULL, pi_star = 0.2, alpha0 = 10){
 
   # --- normalize ---

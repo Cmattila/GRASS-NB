@@ -1,5 +1,5 @@
-Package: MUSC
-Title: Bayesian Variable Selection for Spatially Indexed Count Data
+Package: grassNB
+Title: Group-structured variable selection for spatial negative binomial data with application to cancer registry and spatial omics
 Version: 0.0.0.9000
 Authors@R: c(
     person(given = "Chloe", family = "Mattila", email = "chloemeiann@gmail.com", role = c("aut", "cre")),
@@ -42,5 +42,5 @@ Suggests:
     rmarkdown
 VignetteBuilder: knitr
 Config/testthat/edition: 3
-URL: https://github.com/Cmattila/MUSC
-BugReports: https://github.com/Cmattila/MUSC/issues
+URL: https://github.com/Cmattila/GRASS-NB
+BugReports: https://github.com/Cmattila/GRASS-NB/issues

@@ -177,8 +177,9 @@ VS_Standard_offset <- function(K, y, NeighborhoodList, which.prior,niter, verbos
 
       if(verbose == "TRUE"){
         svMisc::progress(i, niter, progress.bar = FALSE)
-      }else{if(i%%500 == 0){print(paste0(i, " / ", niter))}
       }
+      # else{if(i%%500 == 0){print(paste0(i, " / ", niter))}
+      # }
     }
 
 
@@ -275,8 +276,9 @@ VS_Standard_offset <- function(K, y, NeighborhoodList, which.prior,niter, verbos
 
       if(verbose == "TRUE"){
         svMisc::progress(i, niter, progress.bar = FALSE)
-      }else{if(i%%500 == 0){print(paste0(i, " / ", niter))}
       }
+      # else{if(i%%500 == 0){print(paste0(i, " / ", niter))}
+      # }
     }
 
 
@@ -351,8 +353,9 @@ VS_Standard_offset <- function(K, y, NeighborhoodList, which.prior,niter, verbos
 
       if(verbose == "TRUE"){
         svMisc::progress(i, niter, progress.bar = FALSE)
-      }else{if(i%%500 == 0){print(paste0(i, " / ", niter))}
       }
+      # else{if(i%%500 == 0){print(paste0(i, " / ", niter))}
+      # }
     }
 
 
@@ -432,8 +435,9 @@ VS_Standard_offset <- function(K, y, NeighborhoodList, which.prior,niter, verbos
 
       if(verbose == "TRUE"){
         svMisc::progress(i, niter, progress.bar = FALSE)
-      }else{if(i%%500 == 0){print(paste0(i, " / ", niter))}
       }
+      # else{if(i%%500 == 0){print(paste0(i, " / ", niter))}
+      # }
     }
   }
 
