@@ -144,7 +144,7 @@ SS_group_offset_space <- grassNB::grassNB(X = scale(Features$X),                
                               scale = scale,                  # rate scale
                               which.prior = "SS",             # method
                               niter = 10000,                  # MCMC iterations; use more in practice, brief here for speed
-                              verbose = TRUE,                 # printing MCMC iteration progress
+                              verbose = FALSE,                 # not printing MCMC iteration progress
                               pi_star = 0.1,                  # prior probability that any feature within a group is nonnull
                               alpha0 = 10)                    # concentration parameter for variable inclusion probability.
 
@@ -159,7 +159,7 @@ HS_group_offset_space <- grassNB::grassNB(X = scale(Features$X),                
                               scale = scale,                  # rate scale
                               which.prior = "HS",             # method
                               niter = 10000,                  # MCMC iterations; use more in practice, brief here for speed
-                              verbose = TRUE)                 # printing MCMC iteration progress
+                              verbose = FALSE)                 # not printing MCMC iteration progress
 
 print(str(HS_group_offset_space)) # check the returned list object
 
