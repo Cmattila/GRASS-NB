@@ -9,11 +9,11 @@ output: rmarkdown::github_document
       <!--   <strong>Authors:</strong> Chloe Mattila, Elizabeth Hill, Brian Neelon, and Souvik Seal -->
       <!-- </p> -->
     </td>
-    <!-- <td style="text-align:right; width:1%; white-space:nowrap;"> -->
-    <!--   <!-- invisible spacer: keeps layout, not visible --> -->
-    <!--   <td style="text-align:right; padding-left:400px;"> -->
-    <!--   <img src="GrassNB_logo_simple.png" width="140" height="150"/> -->
-    <!-- </td> -->
+    <td style="text-align:right; width:1%; white-space:nowrap;">
+      <!-- invisible spacer: keeps layout, not visible -->
+      <td style="text-align:right; padding-left:400px;">
+      <img src="GrassNB_logo_simple.png" width="140" height="150"/>
+    </td>
   </tr>
 </table>
 
