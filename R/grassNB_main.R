@@ -1,4 +1,5 @@
-#' @title Main parent function for fitting different models
+#'  @title Main parent function for GRASS-NB
+#' @description Bayesian variable selection in spatially indexed count data with flexible choices of priors
 #'
 #' @param X is the matrix of features
 #' @param y is the vector of the count outcome
