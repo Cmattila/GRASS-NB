@@ -239,7 +239,7 @@ $\times p$. We randomly select four betas and plot their convergence.
 ``` r
 set.seed(2025)
 
-ran_sam <- sample(2:p_dim, 4)
+ran_sam <- sample(2:p_dim, 4)   
 
 titles <- c(
   paste0("HS - Beta ", ran_sam)
@@ -249,7 +249,7 @@ titles <- c(
 par(mfrow = c(2, 2), mar = c(3, 4, 2, 1), oma = c(0, 0, 2, 0))
 for (i in seq_along(ran_sam)) {
   grassNB::MCMC_plot(
-    HS_group_offset_space$Beta[, ran_sam[i]],
+    HS_group_offset_space$Beta[, (ran_sam[i])+1],  # +1 to account for intercept in col 1
     main = titles[i]
   )
 }
