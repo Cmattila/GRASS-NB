@@ -10,11 +10,11 @@
 GRASS-NB
 </h1>
 
-<!-- <p style="margin:0.25rem 0 0;"> -->
+<p style="margin:0.25rem 0 0;">
 
-<!--   <strong>Authors:</strong> Chloe Mattila, Elizabeth Hill, Brian Neelon, and Souvik Seal -->
-
-<!-- </p> -->
+<strong>Authors:</strong> Chloe Mattila, Brian Neelon, Kalyani Sonawane,
+Sha Cao, Peggi Angel, Elizabeth Hill, and Souvik Seal
+</p>
 
 </td>
 
@@ -82,7 +82,7 @@ five except one, which had four. For Case 1, we set two full groups to
 be active (non-null).
 
 ``` r
-set.seed(2025*2025)
+set.seed(2025)
 N <- 100 # number of observations/ spatial units
 p_dim <- 50 # number of features (including features)
 signal_vec <- rep(4, 10)
@@ -111,7 +111,7 @@ with which $\mathbf{y}$ will be generated and the associated
 neighborhood list.
 
 ``` r
-set.seed(2025*2025)
+set.seed(2025)
 
 # Create a 10x10 grid of coordinates since we have an N=100 and assuming no repeated measures
 coords100 <- expand.grid(x = 1:10, y = 1:10)
@@ -131,7 +131,7 @@ Q100 <- diag(rowSums(n_mat100)) - n_mat100    #iCAR precision
 
 ## Simulating phi, iCAR spatial random effects
 phi <- grassNB::phi_True_func(nu_vals=0.1, Q=Q100, n_space=100)
-# nu = 0.1 phi range = -3.727779 4.306155 actual SD = 1.579542
+# nu = 0.1 phi range = -4.228904 4.979688 actual SD = 1.936519
 
 # plotting phi
 df <- data.frame(x = coords100$x,
@@ -156,7 +156,7 @@ Then we simulate $N=100$ outcomes with spatial index phi, simulated
 populations for each spatial unit, and a scale of per 100,000.
 
 ``` r
-set.seed(2025*2025)
+set.seed(2025)
 
 scale = 100000
 pop <- sample(10000:50000, N, TRUE)
@@ -178,7 +178,7 @@ is the vector of the population for each spatial unit and *scale* is the
 desired scale for the rates (i.e. per 100,000).
 
 ``` r
-set.seed(2025*2025)
+set.seed(2025)
 
 SS_group_offset_space <- grassNB::grassNB(X = scale(Features$X),                 # feature matrix
                               y = yy$y,                        # outcome vector
@@ -194,14 +194,14 @@ SS_group_offset_space <- grassNB::grassNB(X = scale(Features$X),                
 
 print(str(SS_group_offset_space)) # check the returned list object
 # List of 9
-#  $ Beta  : num [1:5000, 1:50] 3.22 2.76 2.73 2.76 2.64 ...
-#  $ r     : num [1:5000, 1] 0.14 0.159 0.121 0.128 0.125 ...
+#  $ Beta  : num [1:5000, 1:50] 4.37 4.45 4.3 4.45 4.74 ...
+#  $ r     : num [1:5000, 1] 0.0641 0.0442 0.0606 0.0452 0.069 ...
 #  $ Delta : num [1:5000, 1:50] 1 1 1 1 1 1 1 1 1 1 ...
 #  $ pDelta: num [1:5000, 1:50] 1 1 1 1 1 1 1 1 1 1 ...
-#  $ phi   : num [1:5000, 1:100] 0.03638 0.12102 -0.01187 -0.04556 -0.00945 ...
-#  $ sphiSq: num [1:5000, 1] 0.0265 0.0254 0.0197 0.0181 0.0181 ...
-#  $ Zeta2 : num [1:5000, 1] 14.1 5.51 3.96 3.96 7.67 ...
-#  $ Tau2  : num [1:5000, 1:10] 0.127 1.384 2.076 5.849 0.204 ...
+#  $ phi   : num [1:5000, 1:100] 0.0143 0.1923 0.0328 -0.3537 -0.3766 ...
+#  $ sphiSq: num [1:5000, 1] 0.0976 0.1297 0.1352 0.1483 0.1519 ...
+#  $ Zeta2 : num [1:5000, 1] 12.72 8.46 30.65 45.67 56.79 ...
+#  $ Tau2  : num [1:5000, 1:10] 2.708 0.839 0.315 1.363 5.475 ...
 #  $ Lambda: num [1:5000, 1:49] 0 0 0 0 0 0 0 0 0 0 ...
 # NULL
 
@@ -218,15 +218,15 @@ HS_group_offset_space <- grassNB::grassNB(X = scale(Features$X),                
 
 print(str(HS_group_offset_space)) # check the returned list object
 # List of 9
-#  $ Beta  : num [1:5000, 1:50] 2.35 1.96 1.35 2.25 1.56 ...
-#  $ r     : num [1:5000, 1] 0.138 0.144 0.155 0.169 0.158 ...
+#  $ Beta  : num [1:5000, 1:50] 1.58 2.42 2.37 3.24 2.29 ...
+#  $ r     : num [1:5000, 1] 0.0761 0.1059 0.1058 0.0732 0.071 ...
 #  $ Delta : num [1:5000, 1:50] 1 1 1 1 1 1 1 1 1 1 ...
 #  $ pDelta: num [1:5000, 1:50] 1 1 1 1 1 1 1 1 1 1 ...
-#  $ phi   : num [1:5000, 1:100] 0.2051 0.0921 -0.18 0.1154 0.0518 ...
-#  $ sphiSq: num [1:5000, 1] 0.0666 0.0458 0.0292 0.0281 0.0308 ...
-#  $ Zeta2 : num [1:5000, 1] 0.2671 0.2174 0.1457 0.1296 0.0924 ...
-#  $ Tau2  : num [1:5000, 1:10] 0.283 0.275 0.274 1.027 0.594 ...
-#  $ Lambda: num [1:5000, 1:49] 1.0666 0.4224 4.4224 1.2607 0.0895 ...
+#  $ phi   : num [1:5000, 1:100] 0.0306 -0.0246 0.1722 0.0431 0.1697 ...
+#  $ sphiSq: num [1:5000, 1] 0.0163 0.0125 0.0191 0.0226 0.0193 ...
+#  $ Zeta2 : num [1:5000, 1] 0.38 0.399 0.288 0.494 0.594 ...
+#  $ Tau2  : num [1:5000, 1:10] 0.0199 0.019 0.0338 0.109 0.1984 ...
+#  $ Lambda: num [1:5000, 1:49] 26.4009 66.4278 0.2236 0.3253 0.0901 ...
 # NULL
 ```
 
@@ -316,8 +316,8 @@ res_highlight<- grassNB::plot_pdelta_bars_mcmc_highlights(
   legend_title      = "Model/Outcome",
   base_size         = 12,
   bracket_text_size = 4,
-  highlight_idx  = nonNull_indices_p50_Case1-1, #shifting indexes by 1 to accomodate predictors 1:p-1
-  highlight_fill = "#1F77B4"  # highlight color for truly nonnulls
+  highlight_idx  = nonNull_indices_p50_Case1-1, #shifting indexes by 1 to accommodate predictors 1:p-1
+  highlight_fill = "darkgreen"  # highlight color for truly nonnulls
 )
 # Coordinate system already present.
 # ℹ Adding new coordinate system, which will replace the existing one.
@@ -398,3 +398,10 @@ print(res_HS_highlight$plot)
 ```
 
 <img src="README_files/figure-gfm/CrI-visualization-1.png" width="100%" />
+
+## References
+
+1\\ Mattila, C., Neelon, B., Sonawane, K., Cao, S., Angel, P., Hill, E.,
+& Seal, S. (2024). GRASS-NB: Group-structured variable selection for
+spatial negative binomial data with application to cancer registry and
+spatial omics. bioRxiv, <https://doi.org/10.1101/2025.10.24.684446>

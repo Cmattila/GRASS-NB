@@ -5,9 +5,9 @@ output: rmarkdown::github_document
   <tr>
     <td style="text-align:left; vertical-align:middle;">
       <h1 style="margin:0;">GRASS-NB</h1>
-      <!-- <p style="margin:0.25rem 0 0;"> -->
-      <!--   <strong>Authors:</strong> Chloe Mattila, Elizabeth Hill, Brian Neelon, and Souvik Seal -->
-      <!-- </p> -->
+      <p style="margin:0.25rem 0 0;">
+        <strong>Authors:</strong> Chloe Mattila, Brian Neelon, Kalyani Sonawane, Sha Cao, Peggi Angel, Elizabeth Hill, and Souvik Seal
+      </p>
     </td>
     <td style="text-align:right; width:1%; white-space:nowrap;">
       <!-- invisible spacer: keeps layout, not visible -->
@@ -58,7 +58,7 @@ library(grassNB)
 Then we simulate $(p-1)=199$ features with a within group correlation of $\rho=0.25$.  For each non-null coefficient $\beta_j$, the signal magnitude was fixed at $\beta_j = 4$; all remaining coefficients, intercept included, were set to zero. We set the group size to $M_g = 5$, yielding $G = ⌈(p − 1)/M_g$⌉ groups, with all groups of size five except one, which had four. For Case 1, we set two full groups to be active (non-null).
 
 ```{r constructing feature matrix, out.width = "50%"}
-set.seed(2025*2025)
+set.seed(2025)
 N <- 100 # number of observations/ spatial units
 p_dim <- 50 # number of features (including features)
 signal_vec <- rep(4, 10)
@@ -83,7 +83,7 @@ Features <- feature_sim_grouped(N = N, p = p_dim, group_ind = group_ind,
 We construct a $10 \times 10$ grid under a queen adjacency structure to simulate the spatial random effect, $\mathbf{\phi}$ with $\nu = 0.1$ with which $\mathbf{y}$ will be generated and the associated neighborhood list. 
 
 ```{r constructing-phi, out.width = "50%", message=FALSE, eval = requireNamespace("spam", quietly = TRUE)}
-set.seed(2025*2025)
+set.seed(2025)
 
 # Create a 10x10 grid of coordinates since we have an N=100 and assuming no repeated measures
 coords100 <- expand.grid(x = 1:10, y = 1:10)
@@ -120,7 +120,7 @@ print(phi_plot)
 Then we simulate $N=100$ outcomes with spatial index phi, simulated populations for each spatial unit, and a scale of per 100,000. 
 
 ```{r constructing outcome vector, out.width = "100%"}
-set.seed(2025*2025)
+set.seed(2025)
 
 scale = 100000
 pop <- sample(10000:50000, N, TRUE)
@@ -134,7 +134,7 @@ yy <- grassNB::y_gen_fun(N = N, r = 1, K = Features$K, beta_true = Features$beta
 The main function of "grassNB" fits negative binomial models using either the standard horseshoe prior (which.prior = "HS") or spike and slab prior (which.prior = "SS"), or their grouped extensions (specifying the vector of group indicators; *group_ind*). Additionally, these models can be specified to include a spatial random effect (specifying the neighborhood list, an object of class *nb*; *NeighborhoodList*). $X$ denotes the matrix of spatial-unit-level features (dimension $N\times p-1$). *niter* denotes the number of MCMC iterations.*pop_col* is the vector of the population for each spatial unit and *scale* is the desired scale for the rates (i.e. per 100,000).
 
 ```{r fitting SS and HS grouped varible selection with offset and spatial random effect, out.width= "50%"}
-set.seed(2025*2025)
+set.seed(2025)
 
 SS_group_offset_space <- grassNB::grassNB(X = scale(Features$X),                 # feature matrix
                               y = yy$y,                        # outcome vector
@@ -249,8 +249,8 @@ res_highlight<- grassNB::plot_pdelta_bars_mcmc_highlights(
   legend_title      = "Model/Outcome",
   base_size         = 12,
   bracket_text_size = 4,
-  highlight_idx  = nonNull_indices_p50_Case1-1, #shifting indexes by 1 to accomodate predictors 1:p-1
-  highlight_fill = "#1F77B4"  # highlight color for truly nonnulls
+  highlight_idx  = nonNull_indices_p50_Case1-1, #shifting indexes by 1 to accommodate predictors 1:p-1
+  highlight_fill = "darkgreen"  # highlight color for truly nonnulls
 )
 
 print(res_highlight$plot)
@@ -320,3 +320,8 @@ res_HS_highlight <- grassNB::plot_cri_highlights(
 )
 print(res_HS_highlight$plot)
 ```
+
+
+## References
+1\\) Mattila, C., Neelon, B., Sonawane, K., Cao, S., Angel, P., Hill, E., & Seal, S. (2024). GRASS-NB: Group-structured variable selection for spatial negative binomial data with application to cancer registry and spatial omics. bioRxiv, https://doi.org/10.1101/2025.10.24.684446
+
