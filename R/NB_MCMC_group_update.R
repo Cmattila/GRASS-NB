@@ -355,7 +355,7 @@ VS_Group <- function(K, y, group_ind, NeighborhoodList, which.prior, niter, verb
       # these weight adjustments simplifies it as  (yc - Xsel beta)^T  (yc - Xsel beta), getting rid of the diag(w), note that Xsel is
       # just a transformed version of K, to be specific, a few columns of K for which beta_j's are non-zero
 
-      k_sel <- ncol(Xsel)
+      k_sel <- length(index)
       Sigma_inv_sp <- invA0_sp +
         crossprod(Xsel_sp) +
         spam::diag.spam(rep(nugget, k_sel))
@@ -639,7 +639,7 @@ VS_Group <- function(K, y, group_ind, NeighborhoodList, which.prior, niter, verb
       # these weight adjustments simplifies it as  (yc - Xsel beta)^T  (yc - Xsel beta), getting rid of the diag(w), note that Xsel is
       # just a transformed version of K, to be specific, a few columns of K for which beta_j's are non-zero
 
-      k_sel <- ncol(Xsel)
+      k_sel <- length(index)
       Sigma_inv_sp <- invA0_sp +
         crossprod(Xsel_sp) +
         spam::diag.spam(rep(nugget, k_sel))
