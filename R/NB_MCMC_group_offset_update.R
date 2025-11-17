@@ -334,7 +334,9 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
         omega[g]  <- rbeta(1, wa0_g[g] + incfix[g], wb0_g[g] + Mg[g] - incfix[g])               # mixture weight from Eq. 9, page 56 from Dvorzak
       }
 
-      invA0 <- diag(c(T0, 1/psi), nrow = p)            # diagonal precision matrix with first element being fixed as it corresponds the intercept
+      invA0_full_diag <- c(T0, 1 / psi)       # length p
+
+      invA0 <- diag(invA0_full_diag, nrow = p, ncol = p)           # diagonal precision matrix with first element being fixed as it corresponds the intercept
 
       del_up <- update_delta_g(delta, omega, invA0, z, w, K, p, G, Mg, cumulative_M, a0prior) # delta vector update now loops over each group to update each delta_gi
       delta <- del_up[[1]]                                             # first element of the list correspond to delta_j's
@@ -617,7 +619,10 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
         omega[g]  <- rbeta(1, wa0_g[g] + incfix[g], wb0_g[g] + Mg[g] - incfix[g])               # mixture weight from Eq. 9, page 56 from Dvorzak
       }
 
-      invA0 <- diag(c(T0, 1/psi), nrow = p)            # diagonal precision matrix with first element being fixed as it corresponds the intercept
+      invA0_full_diag <- c(T0, 1 / psi)       # length p
+
+
+      invA0 <- diag(invA0_full_diag, nrow = p, ncol = p)          # diagonal precision matrix with first element being fixed as it corresponds the intercept
 
       del_up <- update_delta_g(delta, omega, invA0, z, w, K, p, G, Mg, cumulative_M, a0prior) # delta vector update now loops over each group to update each delta_gi
       delta <- del_up[[1]]                                             # first element of the list correspond to delta_j's
