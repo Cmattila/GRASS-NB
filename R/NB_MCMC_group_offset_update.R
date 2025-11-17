@@ -35,6 +35,8 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
     stop("Group indicator vector does not match the number of covariates!")
   }
 
+  K_sp <- spam::as.spam(K)  # spam version of K for faster computations
+
   # MCMC features
   niter<-niter	              # Number of MCMC Iterations
   thin<-1				            # Thinning interval
@@ -49,6 +51,7 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
     neighbor_count <- rowSums(A)  # M (diagonal matrix) neighbor count for each spatial unit (notation from Mutiso, Neelon 2022)
     D <- diag(neighbor_count)  # Create diagonal matrix... Degree Matrix
     Q <- D - A     # CAR precision matrix
+    Q_sp <- spam::as.spam(Q) #spam version of Q for faster computations
 
     #spatial parameter inits
     phi_init <- c(spam::rmvnorm(1, sigma=diag(.01, nspace)))	          # Random effects
@@ -135,7 +138,7 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
       #============================================================================#
       ## Algorithm 1st step: update the predictor function and probability vector q ----
       #============================================================================#
-      eta <- K%*%beta + rep(phi,1) + log(pop_col) - log(scale)  #modeling rates with offset for population and scale
+      eta <- as.vector(K_sp%*%beta) + rep(phi,1) + log(pop_col) - log(scale)  #modeling rates with offset for population and scale
 
       q<-1/(1+exp(eta)) # dnbinom fn uses q=1-psi
       q<-ifelse(q<=0, 10^-5,q)
@@ -159,11 +162,34 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
       ## Algorithm 4th step: updating posterior covariance of beta and sample betas ----
       #============================================================================#
       # based on priors, first coefficient i.e., intercept is ignored from penalization
-      K_w <- sqrt(w)*K
-      Sigma_inv <- diag(c(T0, 1/Lambda2/rep(tau2, times = Mg)/zeta2)) + crossprod(K_w) + diag(nugget, p)
-      M <- t(K_w)%*%(sqrt(w)*z)
-      beta <- c(spam::rmvnorm.canonical(1, M, as.matrix(Sigma_inv)))
+      sqrtw    <- sqrt(w)
+      K_w_sp   <- spam::diag.spam(sqrtw) %*% K_sp    # N x p sparse
+
+      # Prior precision diagonal for beta:
+      # first coefficient: T0
+      # others: 1 / (Lambda2_j * tau2_g * zeta2)
+      # where tau2_g is the group-level tau2 for the group of j.
+      tau2_rep <- rep(tau2, times = Mg)             # length p-1
+      prior_diag <- c(
+        T0,
+        1 / (Lambda2 * tau2_rep * zeta2)
+      ) + nugget                                    # add nugget directly
+
+      Q_prior_sp <- spam::diag.spam(prior_diag)     # p x p sparse
+
+      # Likelihood precision: (K_w)' (K_w)
+      Q_lik_sp <- crossprod(K_w_sp)                # p x p sparse
+
+      # Total precision for beta
+      Q_beta_sp <- Q_prior_sp + Q_lik_sp
+
+      # Canonical mean term: (K_w)' (sqrt(w) * z)
+      b_beta <- as.vector(crossprod(K_w_sp, sqrtw * z))
+
+      # Sample beta in canonical form (no as.matrix)
+      beta <- c(spam::rmvnorm.canonical(1, b_beta, Q_beta_sp))
       beta_cov <- beta[-1]
+
 
 
       #============================================================================#
@@ -173,48 +199,70 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
 
       for (g in 1:G) {
         if (is.singleton[g]) {
-          # Singleton group: no lambda_gk or gamma updates
+          # Singleton group: no Lambda2 / gamma updates
           j_idx <- if (g > 1) (cumulative_M[g - 1] + 1):cumulative_M[g] else 1:Mg[1]
-          summand <- sum(beta_cov[j_idx]^2)  # no Lambda2
+          summand <- sum(beta_cov[j_idx]^2)
         } else {
-          # Non-singleton group: full update
+          # Non-singleton group: full local shrinkage updates
           for (j in 1:Mg[g]) {
             idx <- if (g > 1) j + cumulative_M[g - 1] else j
-            Lambda2[idx] <- MCMCpack::rinvgamma(1, 1, scale =
-                                                  1 / gamma[idx] + beta_cov[idx]^2 / (2 * tau2[g] * zeta2))
-            gamma[idx] <- MCMCpack::rinvgamma(1, 1, scale = 1 + 1 / Lambda2[idx])
+            Lambda2[idx] <- MCMCpack::rinvgamma(
+              1, 1,
+              scale = 1 / gamma[idx] +
+                beta_cov[idx]^2 / (2 * tau2[g] * zeta2)
+            )
+            gamma[idx] <- MCMCpack::rinvgamma(
+              1, 1,
+              scale = 1 + 1 / Lambda2[idx]
+            )
           }
           j_idx <- if (g > 1) (cumulative_M[g - 1] + 1):cumulative_M[g] else 1:Mg[1]
           summand <- sum(beta_cov[j_idx]^2 / Lambda2[j_idx])
         }
 
         summand_vec <- c(summand_vec, summand)
-        tau2[g] <- MCMCpack::rinvgamma(1, (Mg[g] + 1) / 2, scale = 1 / epsilon[g] + summand / (2 * zeta2))
-        tau2[g] <- ifelse(tau2[g] > exp(5), exp(5),
-                          ifelse(tau2[g] < exp(-5), exp(-5), tau2[g]))
+
+        tau2[g] <- MCMCpack::rinvgamma(
+          1, (Mg[g] + 1) / 2,
+          scale = 1 / epsilon[g] + summand / (2 * zeta2)
+        )
+        tau2[g] <- ifelse(
+          tau2[g] > exp(5),  exp(5),
+          ifelse(tau2[g] < exp(-5), exp(-5), tau2[g])
+        )
         epsilon[g] <- MCMCpack::rinvgamma(1, 1, scale = 1 + 1 / tau2[g])
       }
 
-      zeta2 <- MCMCpack::rinvgamma(1, p/2,                           # all sum_j beta_j^2 is being used for Zeta update
-                                   scale = 1/xi + sum(summand_vec/tau2)/2)
-      zeta2 <- ifelse(zeta2 > exp(5), exp(5),
-                      ifelse(zeta2 < exp(-5), exp(-5), zeta2))    #thresholding
-      xi <-  MCMCpack::rinvgamma(1, 1, scale = 1 + 1/zeta2)
-
+      zeta2 <- MCMCpack::rinvgamma(
+        1, p / 2,
+        scale = 1 / xi + sum(summand_vec / tau2) / 2
+      )
+      zeta2 <- ifelse(
+        zeta2 > exp(5),  exp(5),
+        ifelse(zeta2 < exp(-5), exp(-5), zeta2)
+      )
+      xi <- MCMCpack::rinvgamma(1, 1, scale = 1 + 1 / zeta2)
 
       #============================================================================#
+      ## Algorithm 6th step: update phi ----
       #============================================================================#
-      priorprec<-1/(sphi^2)*Q                    # Prior precision of phi1
-      priormean<- 0
-      prec<-priorprec+spam::as.spam(diag(w, nspace, nspace))
-      M<-c(w*(z-K%*%beta))                           # note priormean is 0 and only data contributes to M
-      phi<-spam::rmvnorm.canonical(1, M, prec)
+      priorprec_sp <- (1 / (sphi^2)) * Q_sp        # ICAR precision (spam)
 
-      # center phi and update tauphi
-      phi <- phi-mean(phi)
+      W_phi_sp     <- spam::diag.spam(w)           # diag(w)
+      prec_sp      <- priorprec_sp + W_phi_sp
 
-      tauphi<-rgamma(1, .1+(nspace-1)/2, .1+(phi)%*%Q%*%t(phi)/2)      # n-1 since rank of Q is n-1
-      sphi <- sqrt(1/tauphi)
+      # Canonical mean: w * (z - K beta)
+      M_phi <- w * (z - as.vector(K_sp %*% beta))
+
+      phi <- spam::rmvnorm.canonical(1, M_phi, prec_sp)
+      phi <- as.numeric(phi)
+
+      # Center phi and update tauphi
+      phi <- phi - mean(phi)
+
+      quad_phi <- as.numeric(crossprod(phi, Q_sp %*% phi))
+      tauphi <- rgamma(1, .1 + (nspace - 1) / 2, .1 + quad_phi / 2)  # n-1 since rank of Q is n-1
+      sphi <- sqrt(1 / tauphi)
 
 
       #============================================================================#
@@ -248,7 +296,7 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
       #============================================================================#
       ## Algorithm 1st step: update the predictor function and probability vector q ----
       #============================================================================#
-      eta <- K%*%beta + rep(phi,1) + log(pop_col) - log(scale)  #modeling rates with offset for population and scale
+      eta <- as.vector(K_sp %*% beta)  + rep(phi,1) + log(pop_col) - log(scale)  #modeling rates with offset for population and scale
 
       q<-1/(1+exp(eta)) # dnbinom fn uses q=1-psi
       q<-ifelse(q<=0, 10^-5,q)  #prevents overly small q values for stability
@@ -294,19 +342,31 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
       Mstar <- del_up[[3]]                                             # important for nu update
 
       index <- which(delta == 1)                         # indices of the non-zero delta_j's, first element always selected as it corresponds to the intercept
-      invA0 <- invA0[index, index, drop = FALSE]         # we only simulate the non-zero betas, thus only those rows/columns are selected
-      Xsel  <- K[, index, drop = FALSE]*sqrt(w) 		     # select the columns of covariate matrix K for which beta_j's are nonzero, adjustment by Polya weights w
-      yc <- sqrt(w)*z                                    # adjusting z by Polya weights w, recall that we had the term: (z - K beta)^T diag(w) (z - K beta) inside the exponent,
+      sqrtw <- sqrt(w)
+
+      invA0_sel_diag <- invA0_full_diag[index]
+      invA0_sp       <- spam::diag.spam(invA0_sel_diag)       # k_sel x k_sel spam
+      # we only simulate the non-zero betas, thus only those rows/columns are selected
+      Xsel_sp <- spam::diag.spam(sqrtw) %*% K_sp[, index, drop = FALSE]
+      # select the columns of covariate matrix K for which beta_j's are nonzero, adjustment by Polya weights w
+      yc <- sqrtw*z                                    # adjusting z by Polya weights w, recall that we had the term: (z - K beta)^T diag(w) (z - K beta) inside the exponent,
       # these weight adjustments simplifies it as  (yc - Xsel beta)^T  (yc - Xsel beta), getting rid of the diag(w), note that Xsel is
       # just a transformed version of K, to be specific, a few columns of K for which beta_j's are non-zero
 
       k_sel <- ncol(Xsel)
-      Sigma_inv <- invA0 + t(Xsel)%*%Xsel + diag(nugget, k_sel, k_sel)                             # posterior precision matrix
-      sim_beta <- spam::rmvnorm.canonical(1, (t(Xsel)%*%(yc)),       # simulated beta_j's (for only non-zero delta_j's)
-                                          as.matrix(Sigma_inv))
-      beta[index] <- sim_beta                                        # store the non-zero betas at appropriate indices
+      Sigma_inv_sp <- invA0_sp +
+        crossprod(Xsel_sp) +
+        spam::diag.spam(rep(nugget, k_sel))
+
+      b_sel <- as.vector(crossprod(Xsel_sp, yc))
+
+      # posterior precision matrix
+      sim_beta <- spam::rmvnorm.canonical(1, b_sel, Sigma_inv_sp)      # simulated beta_j's (for only non-zero delta_j's)
+
+      beta[index] <- sim_beta        # store the non-zero betas at appropriate indices
       beta[-index] <- 0                                              # rest are simply 0
       beta_cov <- beta[-1]
+
 
 
       #============================================================================#
@@ -339,19 +399,23 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
       #============================================================================#
       ## Algorithm 6th step: update phi (icar prior) ----
       #============================================================================#
-      priorprec<-1/(sphi^2)*Q                    # Prior precision of phi1
-      priormean<- 0
-      prec<-priorprec+spam::as.spam(diag(w, nspace, nspace))
-      M<-c(w*(z-K%*%beta))                           # note priormean is 0 and only data contributes to M
-      phi<-spam::rmvnorm.canonical(1, M, prec)
+      priorprec_sp <- (1 / (sphi^2)) * Q_sp         # ICAR precision (spam)
 
-      # center phi and update tauphi
-      phi <- phi-mean(phi)
+      W_phi_sp     <- spam::diag.spam(w)            # diag(w)
+      prec_sp      <- priorprec_sp + W_phi_sp
 
-      tauphi<-rgamma(1, .1+(nspace-1)/2, .1+(phi)%*%Q%*%t(phi)/2)      # n-1 since rank of Q is n-1
-      sphi <- sqrt(1/tauphi) #save this and see if it is behaving properly should be 1/nu
+      # Canonical mean: w * (z - K beta)
+      M_phi <- w * (z - as.vector(K_sp %*% beta))
 
+      phi <- spam::rmvnorm.canonical(1, M_phi, prec_sp)
+      phi <- as.numeric(phi)
 
+      # Center phi and update tauphi
+      phi <- phi - mean(phi)
+
+      quad_phi <- as.numeric(crossprod(phi, Q_sp %*% phi))
+      tauphi <- rgamma(1, .1 + (nspace - 1) / 2, .1 + quad_phi / 2)
+      sphi <- sqrt(1 / tauphi)
       #============================================================================#
       # Store assigning ----
       #============================================================================#
@@ -381,7 +445,7 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
       #============================================================================#
       ## Algorithm 1st step: update the predictor function and probability vector q ----
       #============================================================================#
-      eta<-K%*%beta + log(pop_col) - log(scale) # modeling rates
+      eta<-as.vector(K_sp%*%beta) + log(pop_col) - log(scale) # modeling rates
 
       q<-1/(1+exp(eta)) # dnbinom fn uses q=1-psi
       q<-ifelse(q<=0, 10^-5,q)
@@ -405,47 +469,85 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
       ## Algorithm 4th step: updating posterior covariance of beta and sample betas ----
       #============================================================================#
       # based on priors, first coefficient i.e., intercept is ignored from penalization
-      K_w <- sqrt(w)*K
-      Sigma_inv <- diag(c(T0, 1/Lambda2/rep(tau2, times = Mg)/zeta2)) + crossprod(K_w) + diag(nugget, p)
-      M <- t(K_w)%*%(sqrt(w)*z)
-      beta <- c(spam::rmvnorm.canonical(1, M, as.matrix(Sigma_inv)))
-      beta_cov <- beta[-1]
+        sqrtw    <- sqrt(w)
+        K_w_sp   <- spam::diag.spam(sqrtw) %*% K_sp    # N x p sparse
 
+        # Prior precision diagonal for beta:
+        # first coefficient: T0
+        # others: 1 / (Lambda2_j * tau2_g * zeta2)
+        # where tau2_g is the group-level tau2 for the group of j.
+        tau2_rep <- rep(tau2, times = Mg)             # length p-1
+        prior_diag <- c(
+          T0,
+          1 / (Lambda2 * tau2_rep * zeta2)
+        ) + nugget                                    # add nugget directly
+
+        Q_prior_sp <- spam::diag.spam(prior_diag)     # p x p sparse
+
+        # Likelihood precision: (K_w)' (K_w)
+        Q_lik_sp <- crossprod(K_w_sp)                # p x p sparse
+
+        # Total precision for beta
+        Q_beta_sp <- Q_prior_sp + Q_lik_sp
+
+        # Canonical mean term: (K_w)' (sqrt(w) * z)
+        b_beta <- as.vector(crossprod(K_w_sp, sqrtw * z))
+
+        # Sample beta in canonical form (no as.matrix)
+        beta <- c(spam::rmvnorm.canonical(1, b_beta, Q_beta_sp))
+        beta_cov <- beta[-1]
 
       #============================================================================#
       ## Algorithm 5th step: update shrinkage parameters ----
       #============================================================================#
-      summand_vec <- NULL
+        summand_vec <- NULL
 
-      for (g in 1:G) {
-        if (is.singleton[g]) {
-          # Singleton group: no lambda_gk or gamma updates
-          j_idx <- if (g > 1) (cumulative_M[g - 1] + 1):cumulative_M[g] else 1:Mg[1]
-          summand <- sum(beta_cov[j_idx]^2)  # no Lambda2
-        } else {
-          # Non-singleton group: full update
-          for (j in 1:Mg[g]) {
-            idx <- if (g > 1) j + cumulative_M[g - 1] else j
-            Lambda2[idx] <- MCMCpack::rinvgamma(1, 1, scale =
-                                                  1 / gamma[idx] + beta_cov[idx]^2 / (2 * tau2[g] * zeta2))
-            gamma[idx] <- MCMCpack::rinvgamma(1, 1, scale = 1 + 1 / Lambda2[idx])
+        for (g in 1:G) {
+          if (is.singleton[g]) {
+            # Singleton group: no Lambda2 / gamma updates
+            j_idx <- if (g > 1) (cumulative_M[g - 1] + 1):cumulative_M[g] else 1:Mg[1]
+            summand <- sum(beta_cov[j_idx]^2)
+          } else {
+            # Non-singleton group: full local shrinkage updates
+            for (j in 1:Mg[g]) {
+              idx <- if (g > 1) j + cumulative_M[g - 1] else j
+              Lambda2[idx] <- MCMCpack::rinvgamma(
+                1, 1,
+                scale = 1 / gamma[idx] +
+                  beta_cov[idx]^2 / (2 * tau2[g] * zeta2)
+              )
+              gamma[idx] <- MCMCpack::rinvgamma(
+                1, 1,
+                scale = 1 + 1 / Lambda2[idx]
+              )
+            }
+            j_idx <- if (g > 1) (cumulative_M[g - 1] + 1):cumulative_M[g] else 1:Mg[1]
+            summand <- sum(beta_cov[j_idx]^2 / Lambda2[j_idx])
           }
-          j_idx <- if (g > 1) (cumulative_M[g - 1] + 1):cumulative_M[g] else 1:Mg[1]
-          summand <- sum(beta_cov[j_idx]^2 / Lambda2[j_idx])
+
+          summand_vec <- c(summand_vec, summand)
+
+          tau2[g] <- MCMCpack::rinvgamma(
+            1, (Mg[g] + 1) / 2,
+            scale = 1 / epsilon[g] + summand / (2 * zeta2)
+          )
+          tau2[g] <- ifelse(
+            tau2[g] > exp(5),  exp(5),
+            ifelse(tau2[g] < exp(-5), exp(-5), tau2[g])
+          )
+          epsilon[g] <- MCMCpack::rinvgamma(1, 1, scale = 1 + 1 / tau2[g])
         }
 
-        summand_vec <- c(summand_vec, summand)
-        tau2[g] <- MCMCpack::rinvgamma(1, (Mg[g] + 1) / 2, scale = 1 / epsilon[g] + summand / (2 * zeta2))
-        tau2[g] <- ifelse(tau2[g] > exp(5), exp(5),
-                          ifelse(tau2[g] < exp(-5), exp(-5), tau2[g]))
-        epsilon[g] <- MCMCpack::rinvgamma(1, 1, scale = 1 + 1 / tau2[g])
-      }
+        zeta2 <- MCMCpack::rinvgamma(
+          1, p / 2,
+          scale = 1 / xi + sum(summand_vec / tau2) / 2
+        )
+        zeta2 <- ifelse(
+          zeta2 > exp(5),  exp(5),
+          ifelse(zeta2 < exp(-5), exp(-5), zeta2)
+        )
+        xi <- MCMCpack::rinvgamma(1, 1, scale = 1 + 1 / zeta2)
 
-      zeta2 <- MCMCpack::rinvgamma(1, p/2,                           # all sum_j beta_j^2 is being used for Zeta update
-                                   scale = 1/xi + sum(summand_vec/tau2)/2)
-      zeta2 <- ifelse(zeta2 > exp(5), exp(5),
-                      ifelse(zeta2 < exp(-5), exp(-5), zeta2))    #thresholding
-      xi <-  MCMCpack::rinvgamma(1, 1, scale = 1 + 1/zeta2)
 
 
       #============================================================================#
@@ -477,7 +579,7 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
       #============================================================================#
       ## Algorithm 1st step: update the predictor function and probability vector q ----
       #============================================================================#
-      eta<-K%*%beta + log(pop_col) - log(scale) # modeling rates
+      eta<-as.vector(K_sp %*% beta) + log(pop_col) - log(scale) # modeling rates
 
       q<-1/(1+exp(eta)) # dnbinom fn uses q=1-psi
       q<-ifelse(q<=0, 10^-5,q)  #prevents overly small q values for stability
@@ -523,19 +625,30 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
       Mstar <- del_up[[3]]                                             # important for nu update
 
       index <- which(delta == 1)                         # indices of the non-zero delta_j's, first element always selected as it corresponds to the intercept
-      invA0 <- invA0[index, index, drop = FALSE]         # we only simulate the non-zero betas, thus only those rows/columns are selected
-      Xsel  <- K[, index, drop = FALSE]*sqrt(w) 		     # select the columns of covariate matrix K for which beta_j's are nonzero, adjustment by Polya weights w
-      yc <- sqrt(w)*z                                    # adjusting z by Polya weights w, recall that we had the term: (z - K beta)^T diag(w) (z - K beta) inside the exponent,
+      sqrtw <- sqrt(w)
+
+      invA0_sel_diag <- invA0_full_diag[index]
+      invA0_sp       <- spam::diag.spam(invA0_sel_diag)       # k_sel x k_sel spam
+      # we only simulate the non-zero betas, thus only those rows/columns are selected
+      Xsel_sp <- spam::diag.spam(sqrtw) %*% K_sp[, index, drop = FALSE]
+      # select the columns of covariate matrix K for which beta_j's are nonzero, adjustment by Polya weights w
+      yc <- sqrtw*z                                    # adjusting z by Polya weights w, recall that we had the term: (z - K beta)^T diag(w) (z - K beta) inside the exponent,
       # these weight adjustments simplifies it as  (yc - Xsel beta)^T  (yc - Xsel beta), getting rid of the diag(w), note that Xsel is
       # just a transformed version of K, to be specific, a few columns of K for which beta_j's are non-zero
 
       k_sel <- ncol(Xsel)
-      Sigma_inv <- invA0 + t(Xsel)%*%Xsel + diag(nugget, k_sel, k_sel)                            # posterior precision matrix
-      sim_beta <- spam::rmvnorm.canonical(1, (t(Xsel)%*%(yc)),       # simulated beta_j's (for only non-zero delta_j's)
-                                          as.matrix(Sigma_inv))
-      beta[index] <- sim_beta                                        # store the non-zero betas at appropriate indices
-      beta[-index] <- 0                                              # rest are simply 0
+      Sigma_inv_sp <- invA0_sp +
+        crossprod(Xsel_sp) +
+        spam::diag.spam(rep(nugget, k_sel))
+
+      b_sel <- as.vector(crossprod(Xsel_sp, yc))
+
+      # posterior precision matrix
+      sim_beta <- spam::rmvnorm.canonical(1, b_sel, Sigma_inv_sp)       # simulated beta_j's (for only non-zero delta_j's)
+      beta[index] <- sim_beta              # store the non-zero betas at appropriate indices
+      beta[-index] <- 0                          # rest are simply 0
       beta_cov <- beta[-1]
+
 
 
       #============================================================================#
