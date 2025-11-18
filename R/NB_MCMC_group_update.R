@@ -367,7 +367,7 @@ VS_Group <- function(K, y, group_ind, NeighborhoodList, which.prior, niter, verb
       yc <- sqrtw * z
 
       # Likelihood precision: Xsel' Xsel
-      Q_lik_sp <- spam::crossprod(Xsel_sp)                # k_sel x k_sel spam
+      Q_lik_sp <- spam::crossprod.spam(Xsel_sp)                # k_sel x k_sel spam
 
       # Posterior precision: invA0_sel + Xsel' Xsel + nugget * I
       Sigma_inv_sp <- invA0_sp +
@@ -375,7 +375,7 @@ VS_Group <- function(K, y, group_ind, NeighborhoodList, which.prior, niter, verb
         spam::diag.spam(rep(nugget, k_sel)) # k_sel x k_sel spam
 
       # Canonical mean term: Xsel' yc
-      b_sel <- as.vector(spam::crossprod(Xsel_sp, yc))    # length k_sel
+      b_sel <- as.vector(spam::crossprod.spam(Xsel_sp, yc))    # length k_sel
 
       # Draw only the selected betas (canonical form)
       sim_beta <- spam::rmvnorm.canonical(1, b_sel, Sigma_inv_sp)
@@ -666,7 +666,7 @@ VS_Group <- function(K, y, group_ind, NeighborhoodList, which.prior, niter, verb
       yc <- sqrtw * z
 
       # Likelihood precision: Xsel' Xsel
-      Q_lik_sp <- spam::crossprod(Xsel_sp)                # k_sel x k_sel spam
+      Q_lik_sp <- spam::crossprod.spam(Xsel_sp)                # k_sel x k_sel spam
 
       # Posterior precision: invA0_sel + Xsel' Xsel + nugget * I
       Sigma_inv_sp <- invA0_sp +
@@ -674,7 +674,7 @@ VS_Group <- function(K, y, group_ind, NeighborhoodList, which.prior, niter, verb
         spam::diag.spam(rep(nugget, k_sel)) # k_sel x k_sel spam
 
       # Canonical mean term: Xsel' yc
-      b_sel <- as.vector(spam::crossprod(Xsel_sp, yc))    # length k_sel
+      b_sel <- as.vector(spam::crossprod.spam(Xsel_sp, yc))    # length k_sel
 
       # Draw only the selected betas (canonical form)
       sim_beta <- spam::rmvnorm.canonical(1, b_sel, Sigma_inv_sp)
