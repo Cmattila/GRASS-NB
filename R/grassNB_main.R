@@ -20,7 +20,7 @@
 
 
 grassNB <- function(X, y, group_ind = NULL, NeighborhoodList = NULL, which.prior = c("HS", "SS"), niter=10000,
-                 verbose = "TRUE", pop_col = NULL, scale = NULL, pi_star = 0.2, alpha0 = 10){
+                    verbose = "TRUE", pop_col = NULL, scale = NULL, pi_star = 0.2, alpha0 = 10){
 
   # --- normalize ---
   y <- if (is.matrix(y)) as.numeric(y[,1]) else as.numeric(y)

@@ -660,7 +660,7 @@ VS_Group <- function(K, y, group_ind, NeighborhoodList, which.prior, niter, verb
 
       # Build Xsel = diag(sqrt(w)) %*% K[, index] in spam
       sqrtw   <- sqrt(w)
-      Xsel_sp <- K_sp[, index, drop = FALSE] %*% spam::diag.spam(sqrtw[index]) # N x k_sel
+      Xsel_sp <- spam::diag.spam(sqrtw) %*% K_sp[, index, drop = FALSE]  # N x k_sel
 
       # yc = sqrt(w) * z
       yc <- sqrtw * z
