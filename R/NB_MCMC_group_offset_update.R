@@ -323,6 +323,7 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
 
       # this is a fusion between SS and HS, group-level HS and inside group simply the earlier SS
       # we are looping over groups to generate group-level omega for SS
+      # we are looping over groups to generate group-level omega for SS
       incfix <- NULL
       for(g in 1:G){
         if(g == 1){
@@ -334,9 +335,7 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
         omega[g]  <- rbeta(1, wa0_g[g] + incfix[g], wb0_g[g] + Mg[g] - incfix[g])               # mixture weight from Eq. 9, page 56 from Dvorzak
       }
 
-      invA0_full_diag <- c(T0, 1 / psi)       # length p
-
-      invA0 <- diag(invA0_full_diag, nrow = p, ncol = p)           # diagonal precision matrix with first element being fixed as it corresponds the intercept
+      invA0 <- diag(c(T0, 1/psi), nrow = p)            # diagonal precision matrix with first element being fixed as it corresponds the intercept
 
       del_up <- update_delta_g(delta, omega, invA0, z, w, K, p, G, Mg, cumulative_M, a0prior) # delta vector update now loops over each group to update each delta_gi
       delta <- del_up[[1]]                                             # first element of the list correspond to delta_j's
@@ -344,30 +343,20 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
       Mstar <- del_up[[3]]                                             # important for nu update
 
       index <- which(delta == 1)                         # indices of the non-zero delta_j's, first element always selected as it corresponds to the intercept
-      sqrtw <- sqrt(w)
-
-      invA0_sel_diag <- invA0_full_diag[index]
-      invA0_sp       <- spam::diag.spam(invA0_sel_diag)       # k_sel x k_sel spam
-      # we only simulate the non-zero betas, thus only those rows/columns are selected
-      Xsel_sp <- spam::diag.spam(sqrtw) %*% K_sp[, index, drop = FALSE]
-      # select the columns of covariate matrix K for which beta_j's are nonzero, adjustment by Polya weights w
-      yc <- sqrtw*z                                    # adjusting z by Polya weights w, recall that we had the term: (z - K beta)^T diag(w) (z - K beta) inside the exponent,
+      invA0 <- invA0[index, index, drop = FALSE]         # we only simulate the non-zero betas, thus only those rows/columns are selected
+      Xsel  <- K[, index, drop = FALSE]*sqrt(w) 		     # select the columns of covariate matrix K for which beta_j's are nonzero, adjustment by Polya weights w
+      yc <- sqrt(w)*z                                    # adjusting z by Polya weights w, recall that we had the term: (z - K beta)^T diag(w) (z - K beta) inside the exponent,
       # these weight adjustments simplifies it as  (yc - Xsel beta)^T  (yc - Xsel beta), getting rid of the diag(w), note that Xsel is
       # just a transformed version of K, to be specific, a few columns of K for which beta_j's are non-zero
 
-      k_sel <- length(index)
-      Sigma_inv_sp <- invA0_sp +
-        crossprod(Xsel_sp) +
-        spam::diag.spam(rep(nugget, k_sel))
-
-      b_sel <- as.vector(crossprod(Xsel_sp, yc))
-
-      # posterior precision matrix
-      sim_beta <- spam::rmvnorm.canonical(1, b_sel, Sigma_inv_sp)      # simulated beta_j's (for only non-zero delta_j's)
-
-      beta[index] <- sim_beta        # store the non-zero betas at appropriate indices
+      k_sel <- ncol(Xsel)
+      Sigma_inv <- invA0 + t(Xsel)%*%Xsel + diag(nugget, k_sel, k_sel)                            # posterior precision matrix
+      sim_beta <- spam::rmvnorm.canonical(1, (t(Xsel)%*%(yc)),       # simulated beta_j's (for only non-zero delta_j's)
+                                          as.matrix(Sigma_inv))
+      beta[index] <- sim_beta                                        # store the non-zero betas at appropriate indices
       beta[-index] <- 0                                              # rest are simply 0
       beta_cov <- beta[-1]
+
 
 
 
@@ -608,6 +597,7 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
 
       # this is a fusion between SS and HS, group-level HS and inside group simply the earlier SS
       # we are looping over groups to generate group-level omega for SS
+      # we are looping over groups to generate group-level omega for SS
       incfix <- NULL
       for(g in 1:G){
         if(g == 1){
@@ -619,10 +609,7 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
         omega[g]  <- rbeta(1, wa0_g[g] + incfix[g], wb0_g[g] + Mg[g] - incfix[g])               # mixture weight from Eq. 9, page 56 from Dvorzak
       }
 
-      invA0_full_diag <- c(T0, 1 / psi)       # length p
-
-
-      invA0 <- diag(invA0_full_diag, nrow = p, ncol = p)          # diagonal precision matrix with first element being fixed as it corresponds the intercept
+      invA0 <- diag(c(T0, 1/psi), nrow = p)            # diagonal precision matrix with first element being fixed as it corresponds the intercept
 
       del_up <- update_delta_g(delta, omega, invA0, z, w, K, p, G, Mg, cumulative_M, a0prior) # delta vector update now loops over each group to update each delta_gi
       delta <- del_up[[1]]                                             # first element of the list correspond to delta_j's
@@ -630,30 +617,19 @@ VS_Group_offset <- function(K, y, group_ind, NeighborhoodList, which.prior, nite
       Mstar <- del_up[[3]]                                             # important for nu update
 
       index <- which(delta == 1)                         # indices of the non-zero delta_j's, first element always selected as it corresponds to the intercept
-      sqrtw <- sqrt(w)
-
-      invA0_sel_diag <- invA0_full_diag[index]
-      invA0_sp       <- spam::diag.spam(invA0_sel_diag)       # k_sel x k_sel spam
-      # we only simulate the non-zero betas, thus only those rows/columns are selected
-      Xsel_sp <- spam::diag.spam(sqrtw) %*% K_sp[, index, drop = FALSE]
-      # select the columns of covariate matrix K for which beta_j's are nonzero, adjustment by Polya weights w
-      yc <- sqrtw*z                                    # adjusting z by Polya weights w, recall that we had the term: (z - K beta)^T diag(w) (z - K beta) inside the exponent,
+      invA0 <- invA0[index, index, drop = FALSE]         # we only simulate the non-zero betas, thus only those rows/columns are selected
+      Xsel  <- K[, index, drop = FALSE]*sqrt(w) 		     # select the columns of covariate matrix K for which beta_j's are nonzero, adjustment by Polya weights w
+      yc <- sqrt(w)*z                                    # adjusting z by Polya weights w, recall that we had the term: (z - K beta)^T diag(w) (z - K beta) inside the exponent,
       # these weight adjustments simplifies it as  (yc - Xsel beta)^T  (yc - Xsel beta), getting rid of the diag(w), note that Xsel is
       # just a transformed version of K, to be specific, a few columns of K for which beta_j's are non-zero
 
-      k_sel <- length(index)
-      Sigma_inv_sp <- invA0_sp +
-        crossprod(Xsel_sp) +
-        spam::diag.spam(rep(nugget, k_sel))
-
-      b_sel <- as.vector(crossprod(Xsel_sp, yc))
-
-      # posterior precision matrix
-      sim_beta <- spam::rmvnorm.canonical(1, b_sel, Sigma_inv_sp)       # simulated beta_j's (for only non-zero delta_j's)
-      beta[index] <- sim_beta              # store the non-zero betas at appropriate indices
-      beta[-index] <- 0                          # rest are simply 0
+      k_sel <- ncol(Xsel)
+      Sigma_inv <- invA0 + t(Xsel)%*%Xsel + diag(nugget, k_sel, k_sel)                            # posterior precision matrix
+      sim_beta <- spam::rmvnorm.canonical(1, (t(Xsel)%*%(yc)),       # simulated beta_j's (for only non-zero delta_j's)
+                                          as.matrix(Sigma_inv))
+      beta[index] <- sim_beta                                        # store the non-zero betas at appropriate indices
+      beta[-index] <- 0                                              # rest are simply 0
       beta_cov <- beta[-1]
-
 
 
       #============================================================================#

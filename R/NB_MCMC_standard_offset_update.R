@@ -241,58 +241,28 @@ VS_Standard_offset <- function(K, y, NeighborhoodList, which.prior,niter, verbos
       ## Algorithm 4th step: updating posterior covariance of beta and sample betas ----
       #============================================================================#
       # how many nonzero deltas this iteration (delta[1] always 1 for intercept)
-      incfix <- sum(delta == 1)
+      incfix <- sum(delta == 1)                          # how many delta_j's are nonzero at this iteration, first element is always 1 as it corresponds to the intercept
+      omega  <- rbeta(1, wa0 + incfix, wb0 + p - incfix) # mixture weight from Eq. 9, page 56 from Dvorzak
+      invA0 <- diag(c(1/T0, 1/psi), nrow = p)            # diagonal precision matrix with first element being fixed as it corresponds the intercept
 
-      # mixture weight omega (Dvorzak Eq. 9)
-      omega  <- rbeta(1, wa0 + incfix, wb0 + p - incfix)
+      del_up <- update_delta(delta, omega, invA0, z, w, K, p, a0prior) # delta vector update
+      delta <- del_up[[1]]                                             # first element of the list correspond to delta_j's
+      pdelta <- del_up[[2]]                                            # second element of the list correspond to p(delta_j = 1)'s
 
-      # Full prior precision diagonal for all p betas (for update_delta)
-      invA0_full_diag <- c(T0, 1 / psi)         # length p
-
-      # invA0 matrix ONLY for update_delta (dense is fine; small p)
-      invA0 <- diag(invA0_full_diag, nrow = p, ncol = p)
-
-      # delta update (uses dense K + invA0; no as.matrix involved)
-      del_up <- update_delta(delta, omega, invA0, z, w, K, p, a0prior)
-      delta  <- del_up[[1]]
-      pdelta <- del_up[[2]]
-
-      # Indices of selected betas (including intercept)
-      index <- which(delta == 1)
-
-      # sqrt(w) trick for speed
-      sqrtw <- sqrt(w)
-
-      # Select columns of K in spam form and apply sqrt(w) row scaling:
-      # Xsel = diag(sqrt(w)) %*% K[, index]
-      Xsel_sp <- spam::diag.spam(sqrtw) %*% K_sp[, index, drop = FALSE]  # N x k_sel (spam)
-
-      # yc = sqrt(w) * z
-      yc <- sqrtw * z  # adjusting z by Polya weights w, recall that we had the term: (z - K beta)^T diag(w) (z - K beta) inside the exponent,
+      index <- which(delta == 1)                         # indices of the non-zero delta_j's, first element always selected as it corresponds to the intercept
+      invA0 <- invA0[index, index, drop = FALSE]         # we only simulate the non-zero betas, thus only those rows/columns are selected
+      Xsel  <- sqrt(w)*K[, index, drop = FALSE] 		     # select the columns of covariate matrix K for which beta_j's are nonzero, adjustment by Polya weights w
+      yc <- sqrt(w)*z                                    # adjusting z by Polya weights w, recall that we had the term: (z - K beta)^T diag(w) (z - K beta) inside the exponent,
       # these weight adjustments simplifies it as  (yc - Xsel beta)^T  (yc - Xsel beta), getting rid of the diag(w), note that Xsel is
       # just a transformed version of K, to be specific, a few columns of K for which beta_j's are non-zero
+      k_sel <- ncol(Xsel)
+      Sigma_inv <- invA0 + t(Xsel)%*%Xsel+ diag(nugget, k_sel, k_sel)                             # posterior precision matrix
+      sim_beta <- spam::rmvnorm.canonical(1, (t(Xsel)%*%(yc)),       # simulated beta_j's (for only non-zero delta_j's)
+                                          as.matrix(Sigma_inv))
+      beta[index] <- sim_beta                                        # store the non-zero betas at appropriate indices
+      beta[-index] <- 0                                              # rest are simply 0
 
-      k_sel <- length(index)
 
-      # Prior precision for selected betas: diag(c(1/T0, 1/psi)[index])
-      invA0_sel_diag <- invA0_full_diag[index]
-      invA0_sp       <- spam::diag.spam(invA0_sel_diag)                  # k_sel x k_sel
-
-      # Posterior precision:
-      # Sigma_inv = invA0_sel + Xsel' Xsel + nugget * I
-      Sigma_inv_sp <- invA0_sp +
-        crossprod(Xsel_sp) +
-        spam::diag.spam(rep(nugget, k_sel))
-
-      # Canonical mean term: Xsel' yc
-      b_sel <- as.vector(crossprod(Xsel_sp, yc))
-
-      # Draw nonzero betas in canonical form (no as.matrix)
-      sim_beta <- spam::rmvnorm.canonical(1, b_sel, Sigma_inv_sp)
-
-      beta[index]  <- sim_beta
-      beta[-index] <- 0
-      # rest are simply 0
 
 
       #============================================================================#
@@ -470,57 +440,27 @@ VS_Standard_offset <- function(K, y, NeighborhoodList, which.prior,niter, verbos
       ## Algorithm 4th step: updating posterior covariance of beta and sample betas ----
       #============================================================================#
       # how many delta_j's are nonzero; delta[1] always 1 (intercept)
-      incfix <- sum(delta == 1)
+      incfix <- sum(delta == 1)                          # how many delta_j's are nonzero at this iteration, first element is always 1 as it corresponds to the intercept
+      omega  <- rbeta(1, wa0 + incfix, wb0 + p - incfix) # mixture weight from Eq. 9, page 56 from Dvorzak
+      invA0 <- diag(c(1/T0, 1/psi), nrow = p)            # diagonal precision matrix with first element being fixed as it corresponds the intercept
 
-      # mixture weight omega (Dvorzak Eq. 9)
-      omega  <- rbeta(1, wa0 + incfix, wb0 + p - incfix)
+      del_up <- update_delta(delta, omega, invA0, z, w, K, p, a0prior) # delta vector update
+      delta <- del_up[[1]]                                             # first element of the list correspond to delta_j's
+      pdelta <- del_up[[2]]                                            # second element of the list correspond to p(delta_j = 1)'s
 
-      # full prior precision diagonal for all p betas
-      invA0_full_diag <- c(T0, 1 / psi)          # length p
-
-      # invA0 matrix only for update_delta (dense is fine; p x p)
-      invA0 <- diag(invA0_full_diag, nrow = p, ncol = p)
-
-      # delta update (uses dense K + invA0)
-      del_up <- update_delta(delta, omega, invA0, z, w, K, p, a0prior)
-      delta  <- del_up[[1]]    # updated inclusion indicators
-      pdelta <- del_up[[2]]    # updated inclusion probs
-
-      # indices of selected betas (including intercept)
-      index <- which(delta == 1)
-
-      # sqrt(w) trick
-      sqrtw <- sqrt(w)
-
-      # Selected design matrix with sqrt(w) row scaling:
-      # Xsel = diag(sqrt(w)) %*% K[, index]
-      Xsel_sp <- spam::diag.spam(sqrtw) %*% K_sp[, index, drop = FALSE]  # N x k_sel, spam
-
-      # yc = sqrt(w) * z
-      yc <- sqrtw * z # adjusting z by Polya weights w, recall that we had the term: (z - K beta)^T diag(w) (z - K beta) inside the exponent,
+      index <- which(delta == 1)                         # indices of the non-zero delta_j's, first element always selected as it corresponds to the intercept
+      invA0 <- invA0[index, index, drop = FALSE]         # we only simulate the non-zero betas, thus only those rows/columns are selected
+      Xsel  <- sqrt(w)*K[, index, drop = FALSE] 		     # select the columns of covariate matrix K for which beta_j's are nonzero, adjustment by Polya weights w
+      yc <- sqrt(w)*z                                    # adjusting z by Polya weights w, recall that we had the term: (z - K beta)^T diag(w) (z - K beta) inside the exponent,
       # these weight adjustments simplifies it as  (yc - Xsel beta)^T  (yc - Xsel beta), getting rid of the diag(w), note that Xsel is
       # just a transformed version of K, to be specific, a few columns of K for which beta_j's are non-zero
+      k_sel <- ncol(Xsel)
+      Sigma_inv <- invA0 + t(Xsel)%*%Xsel+ diag(nugget, k_sel, k_sel)                             # posterior precision matrix
+      sim_beta <- spam::rmvnorm.canonical(1, (t(Xsel)%*%(yc)),       # simulated beta_j's (for only non-zero delta_j's)
+                                          as.matrix(Sigma_inv))
+      beta[index] <- sim_beta                                        # store the non-zero betas at appropriate indices
+      beta[-index] <- 0                                              # rest are simply 0
 
-      k_sel <- length(index)
-
-      # prior precision for selected betas: diag(invA0_full_diag[index])
-      invA0_sel_diag <- invA0_full_diag[index]
-      invA0_sp       <- spam::diag.spam(invA0_sel_diag)                  # k_sel x k_sel, spam
-
-      # posterior precision:
-      # Sigma_inv = invA0_sel + Xsel' Xsel + nugget * I
-      Sigma_inv_sp <- invA0_sp +
-        crossprod(Xsel_sp) +
-        spam::diag.spam(rep(nugget, k_sel))
-
-      # canonical mean term: Xsel' yc
-      b_sel <- as.vector(crossprod(Xsel_sp, yc))
-
-      # simulate beta_j only for selected indices (canonical form; no as.matrix)
-      sim_beta <- spam::rmvnorm.canonical(1, b_sel, Sigma_inv_sp)
-
-      beta[index]  <- sim_beta
-      beta[-index] <- 0                                  # rest are simply 0
 
 
       #============================================================================#
