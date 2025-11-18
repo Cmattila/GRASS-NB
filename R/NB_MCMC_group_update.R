@@ -323,51 +323,66 @@ VS_Group <- function(K, y, group_ind, NeighborhoodList, which.prior, niter, verb
 
       # this is a fusion between SS and HS, group-level HS and inside group simply the earlier SS
       # we are looping over groups to generate group-level omega for SS
+      # Group-level omega_g (unchanged)
       incfix <- NULL
-      for(g in 1:G){
-        if(g == 1){
+      for (g in 1:G) {
+        if (g == 1) {
           delta_sub <- delta[2:(Mg[1] + 1)]
-        }else{
+        } else {
           delta_sub <- delta[(cumulative_M[g - 1] + 2):(cumulative_M[g] + 1)]
         }
-        incfix <- c(incfix, sum(delta_sub == 1))                         # how many delta_j's are nonzero at this iteration, first element is always 1 as it corresponds to the intercept
-        omega[g]  <- rbeta(1, wa0_g[g] + incfix[g], wb0_g[g] + Mg[g] - incfix[g])               # mixture weight from Eq. 9, page 56 from Dvorzak
+        incfix <- c(incfix, sum(delta_sub == 1))
+        omega[g] <- rbeta(
+          1,
+          wa0_g[g] + incfix[g],
+          wb0_g[g] + Mg[g] - incfix[g]
+        )
       }
 
-      invA0_full_diag <- c(T0, 1 / psi)       # length p
+      # Full prior precision for *all* betas
+      invA0 <- diag(c(T0, 1 / psi), nrow = p)
 
-      invA0 <- diag(invA0_full_diag, nrow = p, ncol = p)        # diagonal precision matrix with first element being fixed as it corresponds the intercept
+      # Grouped delta update
+      del_up <- update_delta_g(delta, omega, invA0, z, w,
+                               K, p, G, Mg, cumulative_M, a0prior)
+      delta  <- del_up[[1]]
+      pdelta <- del_up[[2]]
+      Mstar  <- del_up[[3]]
 
-      del_up <- update_delta_g(delta, omega, invA0, z, w, K, p, G, Mg, cumulative_M, a0prior) # delta vector update now loops over each group to update each delta_gi
-      delta <- del_up[[1]]                                             # first element of the list correspond to delta_j's
-      pdelta <- del_up[[2]]                                            # second element of the list correspond to p(delta_j = 1)'s
-      Mstar <- del_up[[3]]                                             # important for nu update
-
-      index <- which(delta == 1)                         # indices of the non-zero delta_j's, first element always selected as it corresponds to the intercept
-      sqrtw <- sqrt(w)
-
-      invA0_sel_diag <- invA0_full_diag[index]
-      invA0_sp       <- spam::diag.spam(invA0_sel_diag)       # k_sel x k_sel spam
-      # we only simulate the non-zero betas, thus only those rows/columns are selected
-      Xsel_sp <- spam::diag.spam(sqrtw) %*% K_sp[, index, drop = FALSE]
-      # select the columns of covariate matrix K for which beta_j's are nonzero, adjustment by Polya weights w
-      yc <- sqrtw*z                                    # adjusting z by Polya weights w, recall that we had the term: (z - K beta)^T diag(w) (z - K beta) inside the exponent,
-      # these weight adjustments simplifies it as  (yc - Xsel beta)^T  (yc - Xsel beta), getting rid of the diag(w), note that Xsel is
-      # just a transformed version of K, to be specific, a few columns of K for which beta_j's are non-zero
-
+      # Indices of selected betas (including intercept)
+      index <- which(delta == 1)
       k_sel <- length(index)
+
+      #  Extract the prior precision submatrix for selected betas (dense)
+      invA0_sel <- invA0[index, index, drop = FALSE]      # k_sel x k_sel
+
+      # Convert that small block to spam
+      invA0_sp  <- spam::as.spam(invA0_sel)               # k_sel x k_sel spam
+
+      # Build Xsel = diag(sqrt(w)) %*% K[, index] in spam
+      sqrtw   <- sqrt(w)
+      Xsel_sp <- spam::diag.spam(sqrtw) %*% K_sp[, index, drop = FALSE]  # N x k_sel
+
+      # yc = sqrt(w) * z
+      yc <- sqrtw * z
+
+      # Likelihood precision: Xsel' Xsel
+      Q_lik_sp <- spam::crossprod(Xsel_sp)                # k_sel x k_sel spam
+
+      # Posterior precision: invA0_sel + Xsel' Xsel + nugget * I
       Sigma_inv_sp <- invA0_sp +
-        crossprod(Xsel_sp) +
-        spam::diag.spam(rep(nugget, k_sel))
+        Q_lik_sp +
+        spam::diag.spam(rep(nugget, k_sel)) # k_sel x k_sel spam
 
-      b_sel <- as.vector(crossprod(Xsel_sp, yc))
+      # Canonical mean term: Xsel' yc
+      b_sel <- as.vector(spam::crossprod(Xsel_sp, yc))    # length k_sel
 
-      # posterior precision matrix
-      sim_beta <- spam::rmvnorm.canonical(1, b_sel, Sigma_inv_sp)       # simulated beta_j's (for only non-zero delta_j's
-      beta[index] <- sim_beta                                        # store the non-zero betas at appropriate indices
-      beta[-index] <- 0                                              # rest are simply 0
-      beta_cov <- beta[-1]
+      # Draw only the selected betas (canonical form)
+      sim_beta <- spam::rmvnorm.canonical(1, b_sel, Sigma_inv_sp)
 
+      beta[index]  <- sim_beta
+      beta[-index] <- 0
+      beta_cov     <- beta[-1]
 
       #============================================================================#
       ## Algorithm 5th step: update shrinkage variance parameter ----
@@ -607,52 +622,66 @@ VS_Group <- function(K, y, group_ind, NeighborhoodList, which.prior, niter, verb
 
       # this is a fusion between SS and HS, group-level HS and inside group simply the earlier SS
       # we are looping over groups to generate group-level omega for SS
+      # Group-level omega_g (unchanged)
       incfix <- NULL
-      for(g in 1:G){
-        if(g == 1){
+      for (g in 1:G) {
+        if (g == 1) {
           delta_sub <- delta[2:(Mg[1] + 1)]
-        }else{
+        } else {
           delta_sub <- delta[(cumulative_M[g - 1] + 2):(cumulative_M[g] + 1)]
         }
-        incfix <- c(incfix, sum(delta_sub == 1))                         # how many delta_j's are nonzero at this iteration, first element is always 1 as it corresponds to the intercept
-        omega[g]  <- rbeta(1, wa0_g[g] + incfix[g], wb0_g[g] + Mg[g] - incfix[g])               # mixture weight from Eq. 9, page 56 from Dvorzak
+        incfix <- c(incfix, sum(delta_sub == 1))
+        omega[g] <- rbeta(
+          1,
+          wa0_g[g] + incfix[g],
+          wb0_g[g] + Mg[g] - incfix[g]
+        )
       }
 
-      invA0_full_diag <- c(T0, 1 / psi)       # length p
+      # Full prior precision for *all* betas
+      invA0 <- diag(c(T0, 1 / psi), nrow = p)
 
-      invA0 <- diag(invA0_full_diag, nrow = p, ncol = p)         # diagonal precision matrix with first element being fixed as it corresponds the intercept
+      # Grouped delta update
+      del_up <- update_delta_g(delta, omega, invA0, z, w,
+                               K, p, G, Mg, cumulative_M, a0prior)
+      delta  <- del_up[[1]]
+      pdelta <- del_up[[2]]
+      Mstar  <- del_up[[3]]
 
-      del_up <- update_delta_g(delta, omega, invA0, z, w, K, p, G, Mg, cumulative_M, a0prior) # delta vector update now loops over each group to update each delta_gi
-      delta <- del_up[[1]]                                             # first element of the list correspond to delta_j's
-      pdelta <- del_up[[2]]                                            # second element of the list correspond to p(delta_j = 1)'s
-      Mstar <- del_up[[3]]                                             # important for nu update
-
-      index <- which(delta == 1)                         # indices of the non-zero delta_j's, first element always selected as it corresponds to the intercept
-      sqrtw <- sqrt(w)
-
-      invA0_sel_diag <- invA0_full_diag[index]
-      invA0_sp       <- spam::diag.spam(invA0_sel_diag)       # k_sel x k_sel spam
-      # we only simulate the non-zero betas, thus only those rows/columns are selected
-      Xsel_sp <- spam::diag.spam(sqrtw) %*% K_sp[, index, drop = FALSE]
-      # select the columns of covariate matrix K for which beta_j's are nonzero, adjustment by Polya weights w
-      yc <- sqrtw*z                                    # adjusting z by Polya weights w, recall that we had the term: (z - K beta)^T diag(w) (z - K beta) inside the exponent,
-      # these weight adjustments simplifies it as  (yc - Xsel beta)^T  (yc - Xsel beta), getting rid of the diag(w), note that Xsel is
-      # just a transformed version of K, to be specific, a few columns of K for which beta_j's are non-zero
-
+      # Indices of selected betas (including intercept)
+      index <- which(delta == 1)
       k_sel <- length(index)
+
+      #  Extract the prior precision submatrix for selected betas (dense)
+      invA0_sel <- invA0[index, index, drop = FALSE]      # k_sel x k_sel
+
+      # Convert that small block to spam
+      invA0_sp  <- spam::as.spam(invA0_sel)               # k_sel x k_sel spam
+
+      # Build Xsel = diag(sqrt(w)) %*% K[, index] in spam
+      sqrtw   <- sqrt(w)
+      Xsel_sp <- spam::diag.spam(sqrtw) %*% K_sp[, index, drop = FALSE]  # N x k_sel
+
+      # yc = sqrt(w) * z
+      yc <- sqrtw * z
+
+      # Likelihood precision: Xsel' Xsel
+      Q_lik_sp <- spam::crossprod(Xsel_sp)                # k_sel x k_sel spam
+
+      # Posterior precision: invA0_sel + Xsel' Xsel + nugget * I
       Sigma_inv_sp <- invA0_sp +
-        crossprod(Xsel_sp) +
-        spam::diag.spam(rep(nugget, k_sel))
+        Q_lik_sp +
+        spam::diag.spam(rep(nugget, k_sel)) # k_sel x k_sel spam
 
-      b_sel <- as.vector(crossprod(Xsel_sp, yc))
+      # Canonical mean term: Xsel' yc
+      b_sel <- as.vector(spam::crossprod(Xsel_sp, yc))    # length k_sel
 
-      # posterior precision matrix
-      sim_beta <- spam::rmvnorm.canonical(1, b_sel, Sigma_inv_sp)       # simulated beta_j's (for only non-zero delta_j's)
-    beta[index] <- sim_beta              # store the non-zero betas at appropriate indices
-    beta[-index] <- 0                          # rest are simply 0
-    beta_cov <- beta[-1]
+      # Draw only the selected betas (canonical form)
+      sim_beta <- spam::rmvnorm.canonical(1, b_sel, Sigma_inv_sp)
 
-
+      beta[index]  <- sim_beta
+      beta[-index] <- 0
+      beta_cov     <- beta[-1]
 
       #============================================================================#
       ## Algorithm 5th step: update shrinkage variance parameter ----
